@@ -1,0 +1,170 @@
+###############################################################################
+#  Copyright 2020 ShenZhen Xiaoniu New Energy Inc. All Rights Reserved.       #
+#  Author: saico@mosf.cn                                                      #
+#  a1mnz5pmyqnami-ats.iot.cn-northwest-1.amazonaws.com.cn                     #
+#  a29stcwgd6oyn6-ats.iot.ap-northeast-2.amazonaws.com                        #
+###############################################################################
+AWSTemplateFormatVersion: '2010-09-09'
+Transform: AWS::Serverless-2016-10-31
+Description: 'iot.mosf.cn nx'
+
+Parameters:
+  MaxResults:
+    Type: Number
+    Default: 100
+  RestoreUserid:
+    Type: String
+    Default: NONE
+  DefaultThingType:
+    Type: String
+    Default: XNEVBK
+  DefaultGuestok:
+    Type: String
+    Default: 1
+  DefaultChargertype:
+    Type: String
+    Default: 1
+  DefaultGunstandard:
+    Type: String
+    Default: 0
+  AWSRegion:
+    Type: String
+    Default: ap-northeast-2
+  IotDataEndpoint:
+    Type: String
+    Default: test.iot.ap-northeast-2.amazonaws.com
+  IOTServerURL:
+    Type: String
+    Default: https://iot.ap-northeast-2.amazonaws.com
+  DDBServerURL:
+    Type: String
+    Default: https://dynamodb.ap-northeast-2.amazonaws.com
+
+Globals:
+  Function:
+    Timeout: 10
+    CodeUri: apps/
+    Runtime: nodejs14.x
+    Layers:
+      - !Ref xniotsamLayer
+
+Resources:
+
+  xnappFunction:
+    Timeout: 5
+    Type: AWS::Serverless::Function
+    Properties:
+      Role: !GetAtt xniotsamRole.Arn
+      Handler: xnapp.mainHandler
+      Events:
+        DTOSPub:
+          Type: IoTRule
+          Properties:
+            Sql: SELECT *,topic(3) as reportmac FROM 'xniot/dtos/+'
+        CONNECT:
+          Type: IoTRule
+          Properties:
+            Sql: SELECT *,topic(5) as connevent FROM '$aws/events/presence/+/+'
+      Environment:
+        Variables:
+          Default_ThingType: !Ref DefaultThingType
+          Default_Guestok: !Ref DefaultGuestok
+          Default_Chargertype: !Ref DefaultChargertype
+          Default_Gunstandard: !Ref DefaultGunstandard
+          AWS_Region: !Ref AWSRegion
+          DDB_Server_URL: !Ref DDBServerURL
+          IOT_Server_URL: !Ref IOTServerURL
+          IOT_Data_ENDPOINT: !Ref IotDataEndpoint
+
+  iotappFunction:
+    Timeout: 5
+    Type: AWS::Serverless::Function
+    Properties:
+      Role: !GetAtt xniotsamRole.Arn
+      Handler: iotappindex.mainHandler
+      Events:
+        iotapp:
+          Type: HttpApi
+          Properties:
+            Path: /{proxy+}
+            Method: get
+            ApiId: !Ref iotapp
+      Environment:
+        Variables:
+          Restore_Userid: !Ref RestoreUserid
+          Max_Results: !Ref MaxResults 
+          Default_ThingType: !Ref DefaultThingType
+          AWS_Region: !Ref AWSRegion
+          DDB_Server_URL: !Ref DDBServerURL
+          IOT_Server_URL: !Ref IOTServerURL
+          IOT_Data_ENDPOINT: !Ref IotDataEndpoint
+  iotapp:
+    Type: AWS::Serverless::HttpApi
+    Properties:
+      CorsConfiguration: 
+        AllowOrigins: 
+          - "http://iot.xnexcharger.com"
+      StageName:
+
+  xniotsamLayer:
+    Type: AWS::Serverless::LayerVersion
+    Properties:
+      LayerName: xniotsamLayer
+      Description: Dependencies for xniotsam app
+      ContentUri: dependencies/
+      CompatibleRuntimes:
+        - nodejs14.x
+      LicenseInfo: 'MIT'
+      RetentionPolicy: Retain
+
+  xniotsamRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: 'Allow'
+            Principal:
+              Service:
+                - iot.amazonaws.com
+                - lambda.amazonaws.com
+                - dynamodb.amazonaws.com
+            Action:
+              - sts:AssumeRole
+      Path: /
+      Policies:
+        - PolicyName: 'xnCustomRole_for_xnsamapp'
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: 'Allow'
+                Action:
+                  - s3:*
+                  - iot:*
+                  - logs:*
+                  - dynamodb:*
+                Resource: '*'
+  t00evuser:
+    Type: AWS::DynamoDB::Table
+    Properties:
+      TableName: evuser
+      AttributeDefinitions:
+        - AttributeName: id
+          AttributeType: S
+        - AttributeName: uflag
+          AttributeType: S
+      KeySchema:
+        - AttributeName: id
+          KeyType: HASH
+      GlobalSecondaryIndexes:
+        - IndexName: gsi_uflag
+          KeySchema:
+            - AttributeName: uflag
+              KeyType: HASH
+          Projection:
+            ProjectionType: KEYS_ONLY
+      BillingMode: PAY_PER_REQUEST
+      ProvisionedThroughput:
+        ReadCapacityUnits: 0
+        WriteCapacityUnits: 0
+
