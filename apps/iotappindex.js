@@ -8,6 +8,7 @@ const { IoTDataPlaneClient,GetThingShadowCommand,PublishCommand } = require('@aw
 const { DynamoDBClient,GetItemCommand,PutItemCommand,UpdateItemCommand,QueryCommand } = require('@aws-sdk/client-dynamodb');
 const { nanoid } = require('nanoid');
 const config = require('./config');
+const uaparser = require('ua-parser-js');
 const moment = require('moment-timezone');
 const iotCONFIG = {region:config.AWS_REGION};
 const iotclient = new IoTClient(iotCONFIG);
@@ -19,7 +20,7 @@ let response = { statusCode: 200, body: 'OK' };
 exports.mainHandler = async (event, context, callback) => {
     console.log(event);
     let apiname = event.pathParameters.proxy || '';
-    console.warn('=====================', apiname+',qry,'+JSON.stringify(event.queryStringParameters)+',env,'+JSON.stringify(process.env, null, 2));
+    console.warn('=====================', apiname+',qry,'+JSON.stringify(event.queryStringParameters));
     try {
         if (apiname=='login') {
             let uid = event.queryStringParameters.userid;
@@ -31,6 +32,20 @@ exports.mainHandler = async (event, context, callback) => {
                 let theuser = await ddbclient.send(new GetItemCommand(getparam));
                 useritem = theuser.Item;
             }
+            let ipaddress = event.requestContext.http.sourceIp;
+            let useragent = event.requestContext.http.userAgent;
+            let ua = uaparser(useragent);
+            let uadevice = ua.device.model;
+            if (!uadevice) {
+              uadevice = ua.device.vendor;
+            }
+            if (!uadevice) {
+              uadevice = ua.os.name;
+            }
+            let uabrowser = ua.browser.name;
+            if (!uabrowser) {
+              uabrowser = '(unknown)';
+            }
             if (useritem) {
                 usertype = useritem.utype.N;
                 if ( useritem.uflag ) {
@@ -38,8 +53,8 @@ exports.mainHandler = async (event, context, callback) => {
                 }
                 let last = moment(new Date().getTime()).tz(config.TZ).format(config.SF);
                 let updateparam = { TableName: 'evuser', Key: {id:{S:uid}},
-                  UpdateExpression: 'SET lastvisit=:last',
-                  ExpressionAttributeValues:{':last':{S:last}}
+                  UpdateExpression: 'SET lastvisit=:last,uadevice=:uadevice,uabrowser=:uabrowser,ipaddress=:ipaddress',
+                  ExpressionAttributeValues:{':last':{S:last},':uadevice':{S:uadevice},':uabrowser':{S:uabrowser},':ipaddress':{S:ipaddress}}
                 };
                 await ddbclient.send(new UpdateItemCommand(updateparam));
             } else {
@@ -94,7 +109,12 @@ exports.mainHandler = async (event, context, callback) => {
                     item = {};
                     item.chargerid = iotdata.things[i].attributes.chargerid;
                     item.mac = iotdata.things[i].thingName;
+                    item.pot = iotdata.things[i].attributes.pot;
+                    item.pon = iotdata.things[i].attributes.pon;
+                    item.sipg = Number(iotdata.things[i].attributes.sipg);
+                    item.pnp = Number(iotdata.things[i].attributes.pnp);
                     item.onltime = iotdata.things[i].attributes.onltime;
+                    item.ver = iotdata.things[i].attributes.fmver;
                     item.offtime = iotdata.things[i].attributes.offtime;
                     item.connected = Number(iotdata.things[i].attributes.connected);
                     item.gunstandard = Number(iotdata.things[i].attributes.gunstandard);
@@ -120,15 +140,13 @@ exports.mainHandler = async (event, context, callback) => {
                       });
                       item.beeptime = moment(beep*1000).tz(config.TZ).format(config.TF);
                       item.beepkeyid = beepkeyid;
-                      if (item.connected) item.actdate = item.onltime.substr(0,4)+'-'+item.onltime.substr(4,2)+'-'+item.onltime.substr(6,2);
-                      else item.actdate = item.offtime.substr(0,4)+'-'+item.offtime.substr(4,2)+'-'+item.offtime.substr(6,2);
+                      item.rebootdate = item.pot.substr(0,4)+'-'+item.pot.substr(4,2)+'-'+item.pot.substr(6,2);
+                      item.onlinedate = item.onltime.substr(0,4)+'-'+item.onltime.substr(4,2)+'-'+item.onltime.substr(6,2);
+                      item.offdate = item.offtime.substr(0,4)+'-'+item.offtime.substr(4,2)+'-'+item.offtime.substr(6,2);
                       item.tp0 = payload.state.reported.tp0-100;
                       item.tp1 = payload.state.reported.tp1-100;
                       item.tp2 = payload.state.reported.tp2-100;
                       item.dor = payload.state.reported.dor;
-                      item.pon = payload.state.reported.pon;
-                      item.ver = payload.state.reported.ver;
-                      item.pnp = payload.state.reported.pnp;
                       item.stp = payload.state.reported.stp;
                       item.lgd = payload.state.reported.lgd;
                       item.sw0 = payload.state.reported.sw0;
@@ -202,13 +220,13 @@ exports.mainHandler = async (event, context, callback) => {
             result.chargertype = Number(iotdata.attributes.chargertype);
             result.gunstandard = Number(iotdata.attributes.gunstandard);
             result.connected = Number(iotdata.attributes.connected);
+            result.ver = iotdata.attributes.fmver;
+            result.pnp = Number(iotdata.attributes.pnp);
             let shadow = await iotdataclient.send(new GetThingShadowCommand(descparam));
             let payload = JSON.parse(String.fromCharCode.apply(null, new Uint8Array(shadow.payload)));
             result.tp0 = payload.state.reported.tp0-100;
             result.tp1 = payload.state.reported.tp1-100;
             result.tp2 = payload.state.reported.tp2-100;
-            result.ver = payload.state.reported.ver;
-            result.pnp = payload.state.reported.pnp;
             result.stp = payload.state.reported.stp;
             result.dor = payload.state.reported.dor;
             result.lgd = payload.state.reported.lgd;
@@ -246,7 +264,7 @@ exports.mainHandler = async (event, context, callback) => {
               if ( result.stp ) {
                 result.stateid = 5;
               } else if ( result.sta == 0 ) {
-                if ( result.cpa >50 && result.cpa < 98 ) {
+                if ( payload.state.reported['cp'+gunid] >50 && payload.state.reported['cp'+gunid] < 98 ) {
                   result.stateid = 1;  //readygunin
                 } else {  //没有插枪，空闲 readyfree
                   if ( result.lgd == 1 ) {  //接地良好
@@ -270,7 +288,14 @@ exports.mainHandler = async (event, context, callback) => {
             if ( loads == 0 ) {
               let pubparam = {
                 topic: 'xniot/work/'+mac,
-                payload: Buffer.from(JSON.stringify({'reload':9})),
+                payload: Buffer.from(JSON.stringify({'beep':2})),
+                qos: 1
+              };
+              await iotdataclient.send(new PublishCommand(pubparam));
+            } else if ( loads == 1) {
+              let pubparam = {
+                topic: 'xniot/work/'+mac,
+                payload: Buffer.from(JSON.stringify({'reload':120})),
                 qos: 1
               };
               await iotdataclient.send(new PublishCommand(pubparam));

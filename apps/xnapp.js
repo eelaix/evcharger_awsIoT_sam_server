@@ -13,6 +13,7 @@ const { IoTClient,
         DetachPolicyCommand,
         DetachThingPrincipalCommand,
         UpdateCertificateCommand,
+        DescribeThingCommand,
         UpdateThingCommand,
         DeleteCertificateCommand } = require('@aws-sdk/client-iot');
 const { IoTDataPlaneClient,PublishCommand } = require('@aws-sdk/client-iot-data-plane');
@@ -83,6 +84,12 @@ let issueCert = async ( mac ) => {
           'gunstandard':config.DEFAULT_GUNSTANDARD,
           'guestok':config.DEFAULT_GUESTOK,
           'imax':'32,0,0',
+          'fmver':'1.0.0',
+          'debug':'1',
+          'pon':'1',
+          'pnp':'1',
+          'sipg':'1',
+          'pot':nowtm,
           'ipaddress':'127.0.0.1'
         },
         merge: true
@@ -131,7 +138,7 @@ exports.mainHandler = async (payload) => {
 
     console.info(JSON.stringify(payload));
 
-    console.time('xnapp');
+    // console.time('xnapp');
 
     if (payload.connevent) {
         let mac = payload.connevent;
@@ -158,21 +165,34 @@ exports.mainHandler = async (payload) => {
             }
         } else if (eventType=='disconnected') {
             if (mac.length==12 && mac!='xniotevesps2') {
-              let nowtm = moment(new Date().getTime()).tz(config.TZ).format(config.SF);
-              let updatethingParams = {
-                thingName: mac,
-                attributePayload: {
-                  attributes: {
-                    'offtime': nowtm,
-                    'connected': '0'
-                  },
-                  merge: true
-                }
-              };
+              let preonlinepasted = 1000;  //seconds
               try {
-                await iotclient.send(new UpdateThingCommand(updatethingParams));
+                let iotdata = await iotclient.send(new DescribeThingCommand({thingName:mac}));
+                let preonline = Number(iotdata.attributes.onltime);
+                let nowseconds = Number(moment(new Date().getTime()).tz(config.TZ).format(config.SF));
+                preonlinepasted = nowseconds - preonline;  //20221231235959 - 202112315959
+                console.log('============preonlinepasted:'+preonlinepasted+',preonline='+preonline+',now='+nowseconds);
               } catch (err) {
-                console.log(err);
+                console.error(err);
+              }
+              console.log('============preonlinepasted:'+preonlinepasted);
+              if ( preonlinepasted > 10 ) {
+                let nowtm = moment(new Date().getTime()).tz(config.TZ).format(config.SF);
+                let updatethingParams = {
+                  thingName: mac,
+                  attributePayload: {
+                    attributes: {
+                      'offtime': nowtm,
+                      'connected': '0'
+                    },
+                    merge: true
+                  }
+                };
+                try {
+                  await iotclient.send(new UpdateThingCommand(updatethingParams));
+                } catch (err) {
+                  console.log(err);
+                }
               }
             }
         } else {
@@ -184,6 +204,35 @@ exports.mainHandler = async (payload) => {
         if (payload._dvtm) {
         }
         if (payload.guc) {
+        }
+        if (payload.firstboot) {
+          //{\"firstboot\":1,\"wifimac\":\"%.*s\",\"ver\":\"%1d.%1d.%1d\",\"dbg\":%1d,\"pon\":%10ld,\"pnp\":%1d,\"sig\":%1d}
+          let nowtm = moment(new Date().getTime()).tz(config.TZ).format(config.SF);
+          let fmver = payload.ver;
+          let debug = payload.dbg;
+          let pon = payload.pon;
+          let pnp = payload.pnp;
+          let sipg = payload.sig;
+          let updatethingParams = {
+            thingName: mac,
+            attributePayload: {
+              attributes: {
+                'pot': nowtm,
+                'pon': pon.toString(),
+                'fmver': fmver,
+                'debug': debug.toString(),
+                'sipg': sipg.toString(),
+                'pnp': pnp.toString(),
+                'connected': '1'
+              },
+              merge: true
+            }
+          };
+          try {
+            await iotclient.send(new UpdateThingCommand(updatethingParams));
+          } catch (err) {
+            console.log(err);
+          }
         }
         if (payload.getcert) {
             if (mac=='xniotevesps2') {
@@ -201,7 +250,6 @@ exports.mainHandler = async (payload) => {
                 }
                 let certpem = certData.certificatePem.replace(/\n/g,'').replace(/-----.*?-----/g,'');
                 let privkey = certData.keyPair.PrivateKey.replace(/\n/g,'').replace(/-----.*?-----/g,'');
-                console.log(certpem);
                 let getcertpayload = {'devcert':certpem};
                 let pubparam = {
                     topic: 'xniot/work/'+mac,
@@ -213,7 +261,6 @@ exports.mainHandler = async (payload) => {
                 } catch (err) {
                   console.log(err);
                 }
-                console.log(privkey);
                 getcertpayload = {'prvkey':privkey};
                 pubparam = {
                     topic: 'xniot/work/'+mac,
@@ -229,6 +276,6 @@ exports.mainHandler = async (payload) => {
         }
     }
 
-    console.timeEnd('xnapp');
+    // console.timeEnd('xnapp');
 
 };
