@@ -46,23 +46,24 @@ exports.mainHandler = async (event, context, callback) => {
             if (!uabrowser) {
               uabrowser = '(unknown)';
             }
+            let last = moment(new Date().getTime()).tz(config.TZ).format(config.SF);
             if (useritem) {
-                usertype = useritem.utype.N;
+                if ( useritem.utype ) {
+                  usertype = useritem.utype.N;
+                }
                 if ( useritem.uflag ) {
                   userflag = useritem.uflag.S;
                 }
-                let last = moment(new Date().getTime()).tz(config.TZ).format(config.SF);
                 let updateparam = { TableName: 'evuser', Key: {id:{S:uid}},
-                  UpdateExpression: 'SET lastvisit=:last,uadevice=:uadevice,uabrowser=:uabrowser,ipaddress=:ipaddress',
-                  ExpressionAttributeValues:{':last':{S:last},':uadevice':{S:uadevice},':uabrowser':{S:uabrowser},':ipaddress':{S:ipaddress}}
+                  UpdateExpression: 'SET lastvisit=:last,uadevice=:uadev,uabrowser=:uabr,ipaddress=:ipadd',
+                  ExpressionAttributeValues:{':last':{S:last},':uadev':{S:uadevice},':uabr':{S:uabrowser},':ipadd':{S:ipaddress}}
                 };
                 await ddbclient.send(new UpdateItemCommand(updateparam));
             } else {
                 uid = await nanoid();  //21位包含_-
-                let last = moment(new Date().getTime()).tz(config.TZ).format(config.SF);
                 // utype: 0 普通用户，1账单组管理者，由超级管理者升级，用户ID为账单组，账单组内设备由超级管理者分配 9超级管理者        ,permedthing:{SS:[]}
                 let putparam = { TableName: 'evuser', Item: {
-                      id:{S:uid},utype:{N:'0'},lastvisit:{S:last}
+                      id:{S:uid},utype:{N:'0'},lastvisit:{S:last},regtime:{S:last},uadevice:{S:uadevice},uabrowser:{S:uabrowser},ipaddress:{S:ipaddress}
                     }
                 };
                 await ddbclient.send(new PutItemCommand(putparam));
@@ -75,7 +76,8 @@ exports.mainHandler = async (event, context, callback) => {
             let getparam = { TableName: 'evuser', Key: {id:{S:uid}} };
             let useritem = (await ddbclient.send(new GetItemCommand(getparam))).Item;
             let usertype = 0;
-            if (useritem) usertype = useritem.utype.N;
+            console.log(useritem);
+            if (useritem && useritem.utype) usertype = useritem.utype.N;
             if ( usertype == 9 ) {
               let nextToken = event.queryStringParameters.nextToken;
               let search = event.queryStringParameters.search;
@@ -353,8 +355,8 @@ exports.mainHandler = async (event, context, callback) => {
           let uflag = event.queryStringParameters.uflag;
           let last = moment(new Date().getTime()).tz(config.TZ).format(config.SF);
           let updateparam = { TableName: 'evuser', Key: {id:{S:uid}},
-            UpdateExpression: 'SET lastvisit=:last,uflag=:uflag',
-            ExpressionAttributeValues:{':last':{S:last},':uflag':{S:uflag}}
+            UpdateExpression: 'SET lastvisit=:last,uflag=:flag',
+            ExpressionAttributeValues:{':last':{S:last},':flag':{S:uflag}}
           };
           await ddbclient.send(new UpdateItemCommand(updateparam));
           response.body = JSON.stringify({rc:1});

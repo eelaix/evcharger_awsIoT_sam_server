@@ -171,11 +171,9 @@ exports.mainHandler = async (payload) => {
                 let preonline = Number(iotdata.attributes.onltime);
                 let nowseconds = Number(moment(new Date().getTime()).tz(config.TZ).format(config.SF));
                 preonlinepasted = nowseconds - preonline;  //20221231235959 - 202112315959
-                console.log('============preonlinepasted:'+preonlinepasted+',preonline='+preonline+',now='+nowseconds);
               } catch (err) {
                 console.error(err);
               }
-              console.log('============preonlinepasted:'+preonlinepasted);
               if ( preonlinepasted > 10 ) {
                 let nowtm = moment(new Date().getTime()).tz(config.TZ).format(config.SF);
                 let updatethingParams = {
@@ -230,6 +228,31 @@ exports.mainHandler = async (payload) => {
           };
           try {
             await iotclient.send(new UpdateThingCommand(updatethingParams));
+          } catch (err) {
+            console.log(err);
+          }
+          let imax = [32,32,32];
+          let chargerid = '000000';
+          let chargertype = 0; //美标
+          let gunstandard = 1; //单相单枪
+          try {
+            let iotdata = await iotclient.send(new DescribeThingCommand({thingName:mac}));
+            let imaxstr = iotdata.attributes.imax.split(',');
+            imax[0] = Number(imaxstr[0]); imax[1] = Number(imaxstr[1]); imax[2] = Number(imaxstr[3]);
+            chargerid = iotdata.attributes.chargerid;
+            chargertype = Number(iotdata.attributes.chargertype);
+            gunstandard = Number(iotdata.attributes.gunstandard);
+          } catch (err) {
+            console.error(err);
+          }
+          let outjson = {'firstboot':{'limit':imax,'chargerid':chargerid,'chargertype':chargertype,'gunstandard':gunstandard}};
+          let pubparam = {
+            topic: 'xniot/work/'+mac,
+            payload: Buffer.from(JSON.stringify(outjson)),
+            qos: 1
+          };
+          try {
+            await iotdataclient.send(new PublishCommand(pubparam));
           } catch (err) {
             console.log(err);
           }
