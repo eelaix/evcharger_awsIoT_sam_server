@@ -79,8 +79,8 @@ aws iot create-thing-type \
 ## 第五步：测试
 
 1. http://iot.yourdomain.com/devices.html 这是你的后台管理软件地址
-2. http://iot.yourdomain.com/charger.html?id=100111这是你的充电桩充电软件访问地址
-3. 通过 http://www.cli.im/url生成二维码贴在机器上即可访问
+2. http://iot.yourdomain.com/charger.html?id=100111 这是你的充电桩充电软件访问地址
+3. 通过 http://www.cli.im/url 生成二维码贴在机器上即可访问
 4. 设备支持WIFI联网，可以有三种方法配网，其中方法一仅适合中国大陆地址，其他两种方法全球适用，
 5. 方法一，二适合知道WIFI密码的情况，方法三适合不知道WIFI密码，可以按WIFI路由器上的WPS按钮的情况。
 6. 如需要测试设备请联系我公司采购
