@@ -20,7 +20,7 @@ let response = { statusCode: 200, body: 'OK' };
 exports.mainHandler = async (event, context, callback) => {
     console.log(event);
     let apiname = event.pathParameters.proxy || '';
-    console.warn('=====================', apiname+',qry,'+JSON.stringify(event.queryStringParameters));
+    console.warn(apiname,'qry,'+JSON.stringify(event.queryStringParameters));
     try {
         if (apiname=='login') {
             let uid = event.queryStringParameters.userid;
@@ -76,36 +76,58 @@ exports.mainHandler = async (event, context, callback) => {
             let getparam = { TableName: 'evuser', Key: {id:{S:uid}} };
             let useritem = (await ddbclient.send(new GetItemCommand(getparam))).Item;
             let usertype = 0;
-            console.log(useritem);
             if (useritem && useritem.utype) usertype = useritem.utype.N;
             if ( usertype == 9 ) {
-              let nextToken = event.queryStringParameters.nextToken;
+              let iotdata = undefined;
               let search = event.queryStringParameters.search;
-              let connected = Number(event.queryStringParameters.connected);
-              let iotdata;
-              let listParam = {maxResults:config.MAX_RESULTS,thingTypeName:config.DEFAULT_THINGTYPE};
-              if (nextToken) {
-                  listParam.nextToken = nextToken;
-              }
-              if (search) {
-                  listParam.attributeName = 'chargerid';
-                  listParam.attributeValue = search;
-                  if (search.length<6) {  //id是6位字符串，项目初期为全数字，后期可以带字母
-                    listParam.usePrefixAttributeValue = true;
-                  }
-              }
-              if (connected) {
-                listParam.attributeName = 'connected';
-                listParam.attributeValue = connected==1?'1':'0';
-                listParam.usePrefixAttributeValue = false;
-              }
-              try {
-                  iotdata = await iotclient.send(new ListThingsCommand(listParam));
-              } catch (err) {
-                  iotdata = undefined;
+              if ( search && search.length == 12 ) {
+                try {
+                  let descdata = await iotclient.send(new DescribeThingCommand({thingName:search}));
+                  iotdata = {things:[]};
+                  iotdata.things.push(descdata);
+                } catch (err) {
+                  console.error(err);
+                }
+              } else {
+                let nextToken = event.queryStringParameters.nextToken;
+                let connected = Number(event.queryStringParameters.connected);
+                let listParam = {maxResults:config.MAX_RESULTS};
+                if (nextToken) {
+                    listParam.nextToken = nextToken;
+                }
+                if (search && search.length > 3 && search.length < 11) {
+                    if ( search.length < 6 ) {
+                      listParam.attributeName = 'chargerid';
+                      listParam.attributeValue = search;
+                      listParam.usePrefixAttributeValue = true;
+                    } else if ( search.length == 6 ) {
+                      listParam.attributeName = 'chargerid';
+                      listParam.attributeValue = search;
+                    } else if ( search.length < 11 ) {
+                      listParam.attributeName = 'onltime';
+                      listParam.attributeValue = search.replace(/-/g,'');
+                      listParam.usePrefixAttributeValue = true;
+                    }
+                }
+                if (connected) {
+                  listParam.attributeName = 'connected';
+                  listParam.attributeValue = connected==1?'1':'0';
+                }
+                if ( !listParam.attributeName ) {
+                  listParam.thingTypeName = config.DEFAULT_THINGTYPE;
+                }
+                try {
+                    console.log(JSON.stringify(listParam));
+                    iotdata = await iotclient.send(new ListThingsCommand(listParam));
+                } catch (err) {
+                    console.error(err);
+                    iotdata = undefined;
+                }
               }
               if (iotdata) {
-                  result.nextToken = iotdata.nextToken;
+                  if ( iotdata.nextToken ) {
+                    result.nextToken = iotdata.nextToken;
+                  }
                   let item,getParam,shadow,payload,shadowtsmeta,beep,beepkeyid;
                   for (let i=0;i<iotdata.things.length;i++) {
                     item = {};
@@ -218,6 +240,8 @@ exports.mainHandler = async (event, context, callback) => {
               iotdata = undefined;
             }
             result.mac = mac;
+            let cpid = otdata.attributes.cpid;
+            if (cpid==undefined) cpid = '0';/*三相单枪或单相单枪时,CP电路的编号,仅在服务器使用，不下发到设备，不影响设备*/
             result.guestok = Number(iotdata.attributes.guestok);
             result.chargertype = Number(iotdata.attributes.chargertype);
             result.gunstandard = Number(iotdata.attributes.gunstandard);
@@ -233,14 +257,14 @@ exports.mainHandler = async (event, context, callback) => {
             result.dor = payload.state.reported.dor;
             result.lgd = payload.state.reported.lgd;
             if ( result.chargertype < 2 ) {  //0=三相电，1=单相单枪
-              result.sta = payload.state.reported.st0;
-              result.swa = payload.state.reported.sw0;
-              result.ixa = payload.state.reported.ix0;
+              result.sta = payload.state.reported['st'+cpid];
+              result.swa = payload.state.reported['sw'+cpid];
+              result.ixa = payload.state.reported['ix'+cpid];
               result.ixa = result.ixa>10000?(result.ixa/1000).toFixed(0):(result.ixa/1000).toFixed(1);
               if ( result.chargertype == 0 ) result.ixa = result.ixa + 'x3';
-              result.cpa = (payload.state.reported.cp0/10).toFixed(1);
-              result.cza = (payload.state.reported.cz0/10).toFixed(1);
-              result.pwa = payload.state.reported.pw0;
+              result.cpa = (payload.state.reported['cp'+cpid]/10).toFixed(1);
+              result.cza = (payload.state.reported['cz'+cpid]/10).toFixed(1);
+              result.pwa = payload.state.reported['pw'+cpid];
               if ( result.chargertype == 0 ) {
                 result.pwa = payload.state.reported.pw0+payload.state.reported.pw1+payload.state.reported.pw2;
               }
@@ -471,7 +495,6 @@ exports.mainHandler = async (event, context, callback) => {
             let iotdata = undefined;
             try {
               iotdata = await iotclient.send(new ListThingsCommand(listParam));
-              console.log(iotdata);
             } catch (err) {
               iotdata = undefined;
             }
@@ -557,7 +580,7 @@ exports.mainHandler = async (event, context, callback) => {
             response.body = 'iotappServer: ' + nowtmstr + ' @ ' + config.APIVERSION;
             return response;
         } else {
-            console.warn('=====================', apiname+',qry,'+JSON.stringify(event.queryStringParameters)+',env,'+JSON.stringify(process.env, null, 2));
+            console.warn(apiname, 'qry,'+JSON.stringify(event.queryStringParameters)+',env,'+JSON.stringify(process.env, null, 2));
             response.body = 'NOT FOUND';
             response.statusCode = 404;
             callback(null, response);

@@ -89,6 +89,7 @@ let issueCert = async ( mac ) => {
           'pon':'1',
           'pnp':'1',
           'sipg':'1',
+          'cpid':config.SIMPLE_GUN_CPID,/*三相单枪或单相单枪时,CP电路的编号,仅在服务器使用，不下发到设备，不影响设备*/
           'pot':nowtm,
           'ipaddress':'127.0.0.1'
         },

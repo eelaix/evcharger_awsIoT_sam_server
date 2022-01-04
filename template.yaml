@@ -1,14 +1,15 @@
 ###############################################################################
 #  Copyright 2020 ShenZhen Xiaoniu New Energy Inc. All Rights Reserved.       #
 #  Author: saico@mosf.cn                                                      #
-#  a1mnz5pmyqnami-ats.iot.cn-northwest-1.amazonaws.com.cn                     #
-#  a29stcwgd6oyn6-ats.iot.ap-northeast-2.amazonaws.com                        #
 ###############################################################################
 AWSTemplateFormatVersion: '2010-09-09'
 Transform: AWS::Serverless-2016-10-31
 Description: 'iot.mosf.cn nx'
 
 Parameters:
+  TimeZone:
+    Type: String
+    Default: Asia/Shanghai
   MaxResults:
     Type: Number
     Default: 100
@@ -27,18 +28,47 @@ Parameters:
   DefaultGunstandard:
     Type: String
     Default: 0
+  SimpleGunCPid:
+    Type: String
+    Default: 0
   AWSRegion:
     Type: String
-    Default: ap-northeast-2
+    Default: cn-northwest-1
   IotDataEndpoint:
     Type: String
-    Default: test.iot.ap-northeast-2.amazonaws.com
+    Default: a1mnz5pmyqnami-ats.iot.cn-northwest-1.amazonaws.com.cn
   IOTServerURL:
     Type: String
-    Default: https://iot.ap-northeast-2.amazonaws.com
+    Default: https://iot.cn-northwest-1.amazonaws.com
   DDBServerURL:
     Type: String
-    Default: https://dynamodb.ap-northeast-2.amazonaws.com
+    Default: https://dynamodb.cn-northwest-1.amazonaws.com
+
+    # 一定要记得修改config.js中的策略文档模板 POLICY_DOCUMENT
+
+    # 以下是中国宁夏和韩国的配置参数
+
+    # Default: ap-northeast-2
+    # Default: a29stcwgd6oyn6-ats.iot.ap-northeast-2.amazonaws.com
+
+    # Default: cn-northwest-1
+    # Default: a1mnz5pmyqnami-ats.iot.cn-northwest-1.amazonaws.com.cn
+
+    # 在运行 sam build, sam deploy --guided 之前，请注意先创建事物类型，命令如下：
+    # aws iot create-thing-type \
+    #      --thing-type-name "XNEVBK" \
+    #       --thing-type-properties "thingTypeDescription=Created by ShenZhen Xiaoniu Company (www.mosf.cn),searchableAttributes=chargerid,connected,onltime"
+
+    # sam deploy --guided  所有参数都用默认，iotappFunction may not have authorization defined, Is this okay? 除外，必需要回答y
+    # sam deploy 部署完成后，可根据实际情况变更参数，入口：AWSConsole -> Lambda -> Function(函数) -> (one of function,选择一个函数) -> 配置 -> 环境变量
+    # 每个函数的使用变量不尽相同，根据实际需要设置
+
+    # 注意：固件已内置了初始化事物名称(xniotevesps2)及证书，设备第一次开机会自动连接到AWSIoT并且立即更新私有证书及事物名称
+    #      服务器务必先准备好初始化事物，并且绝对永久不允许变更，修改或删除（有效期为50年）
+
+    # evcharger_awsIoT_vue_client 这个项目需要修改的位置是：
+    # 1. go.sh 修改部署的s3bucket，  这个变量是指html页面在S3的部署位置，所以需要事先创建这个Bucket，这个bucketname是一个域名，域名和S3存储映射的方法请自行搜索
+    # 2. config.js 在evcharger_awsIoT_sam_server部署成功后，到Console->APIGateWay中找到HttpApi的域名地址，到本项目中修改 部署 测试
 
 Globals:
   Function:
@@ -67,6 +97,7 @@ Resources:
             Sql: SELECT *,topic(5) as connevent FROM '$aws/events/presence/+/+'
       Environment:
         Variables:
+          Time_Zone: !Ref TimeZone
           Default_ThingType: !Ref DefaultThingType
           Default_Guestok: !Ref DefaultGuestok
           Default_Chargertype: !Ref DefaultChargertype
@@ -91,6 +122,7 @@ Resources:
             ApiId: !Ref iotapp
       Environment:
         Variables:
+          Time_Zone: !Ref TimeZone
           Restore_Userid: !Ref RestoreUserid
           Max_Results: !Ref MaxResults 
           Default_ThingType: !Ref DefaultThingType
@@ -98,11 +130,13 @@ Resources:
           DDB_Server_URL: !Ref DDBServerURL
           IOT_Server_URL: !Ref IOTServerURL
           IOT_Data_ENDPOINT: !Ref IotDataEndpoint
+          Simple_Gun_CPid: !Ref SimpleGunCPid
   iotapp:
     Type: AWS::Serverless::HttpApi
     Properties:
       CorsConfiguration: 
         AllowOrigins: 
+          - "http://iot.mosf.cn"
           - "http://iot.xnexcharger.com"
       StageName:
 
