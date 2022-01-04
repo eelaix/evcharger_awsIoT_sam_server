@@ -27,14 +27,15 @@ There 2 projects aimed to support AWS IoT EvCHARGER.
 
 # 程序部署 （Install)
 
-第一步：注册aws账号
+## 第一步：注册aws账号
 
 访问 [亚马逊中国区](https://www.amazonaws.cn/) 注册中国区账号  或者
 访问 [亚马逊全球](https://aws.amazon.com/)   注册全球账号
 
-第二步：在本地电脑上安装开发环境及配置
-2.1 安装aws cli -> [安装方法](https://aws.amazon.com/cn/cli/)
-2.1 本地配置文件:
+## 第二步：在本地电脑上安装开发环境及配置
+
+1. 安装aws cli -> [安装方法](https://aws.amazon.com/cn/cli/)
+2. 本地配置文件:
 .aws/config
 [default]
 region = cn-northwest-1
@@ -44,31 +45,35 @@ output = json
 aws_access_key_id = xxxx
 aws_secret_access_key = yyy
 
-第三步：进入亚马逊管理平台获取相关参数
-3.1 管理后台 -> AWSIoT -> 设置 -> 终端节点 得到你的物联网服务器地址，比如：xxxx.ats.iot.cn-northwest-1.amazonaws.com.cn
-3.2 管理后台 -> 右上角用户名 -> 复制账户数字编号(记下后面有用)
-3.3 查询并记录你的AWS服务所在区域代码，比如中国北京是cn-north-1,中国宁夏是cn-northwest-1
-3.4 打开sam项目源代码，修改apps/config.js文件，找到 POLICY_DOCUMENT 变量后面 Resource->arn后面的对应数值进行修改，比如：
+## 第三步：进入亚马逊管理平台获取相关参数
+
+1. 管理后台 -> AWSIoT -> 设置 -> 终端节点 得到你的物联网服务器地址，比如：xxxx.ats.iot.cn-northwest-1.amazonaws.com.cn
+2. 管理后台 -> 右上角用户名 -> 复制账户数字编号(记下后面有用)
+3. 查询并记录你的AWS服务所在区域代码，比如中国北京是cn-north-1,中国宁夏是cn-northwest-1
+4. 打开sam项目源代码，修改apps/config.js文件，找到 POLICY_DOCUMENT 变量后面 Resource->arn后面的对应数值进行修改，比如：
 arn:aws-cn:iot:cn-northwest-1:1234567888:修改为对应的值，其中非中国地区aws-cn改为aws，服务区域代码及用户账户编号对应修改
-3.5 打开sam项目源代码，修改template.yaml将其中的相关参数进行修改
-3.6 注意修改template.yaml中 AllowOrigins 对应项目
-3.7 申请一个域名，并在S3中创建一个存储桶，存储桶的名字是这个域名，在域名管理后台将域名CNAME到这个存储桶的WEB访问地址(存储通开启WEB访问功能)
-3.8 执行以下代码，创建事务类型：
+5. 打开sam项目源代码，修改template.yaml将其中的相关参数进行修改
+6. 注意修改template.yaml中 AllowOrigins 对应项目
+7. 申请一个域名，并在S3中创建一个存储桶，存储桶的名字是这个域名，在域名管理后台将域名CNAME到这个存储桶的WEB访问地址(存储通开启WEB访问功能)
+8. 执行以下代码，创建事务类型：
+
 aws iot create-thing-type \
     --thing-type-name "XNEVBK" \
     --thing-type-properties "thingTypeDescription=Created by ShenZhen Xiaoniu Company (www.mosf.cn),searchableAttributes=chargerid,connected,onltime"
 
-第四步：安装充电桩平台软件
-4.1 进入sam项目源代码，进入dependencies/nodejs子目录，执行npm install --save
-4.2 返回sam项目源代码，执行sam build
-4.3 执行sam deploy --guided 进行安装
-4.4 如果没有正确安装，根据提示修改，安装成功后进入后台，找到APIGateway，找到HttpApi接口地址
-4.5 进入vue项目源代码，找到src/config.js文件，将上一步得到的接口地址填入export const BASE变量中
-4.6 修改vue项目go.sh其中的s3bucket修改为3.7中的域名存储桶
-4.7 运行./go.sh进行HTML静态页面部署
+## 第四步：安装充电桩平台软件
 
-第五步：测试
-5.1 http://iot.yourdomain.com/devices.html 这是你的后台管理软件地址
-5.2 http://iot.yourdomain.com/charger.html?id=100111这是你的充电桩充电软件访问地址 通过 http://www.cli.im/url生成二维码贴在机器上即可访问
-5.3 设备支持WIFI联网，可以有三种方法配网，其中方法一仅适合中国大陆地址，其他两种方法全球适用，方法一，二适合知道WIFI密码的情况，方法三适合不知道WIFI密码，可以按WIFI路由器上的WPS按钮的情况。
-5.4 如需要测试设备请联系我公司采购
+1. 进入sam项目源代码，进入dependencies/nodejs子目录，执行npm install --save
+2. 返回sam项目源代码，执行sam build
+3. 执行sam deploy --guided 进行安装
+4. 如果没有正确安装，根据提示修改，安装成功后进入后台，找到APIGateway，找到HttpApi接口地址
+5. 进入vue项目源代码，找到src/config.js文件，将上一步得到的接口地址填入export const BASE变量中
+6. 修改vue项目go.sh其中的s3bucket修改为3.7中的域名存储桶
+7. 运行./go.sh进行HTML静态页面部署
+
+## 第五步：测试
+
+1. http://iot.yourdomain.com/devices.html 这是你的后台管理软件地址
+2. http://iot.yourdomain.com/charger.html?id=100111这是你的充电桩充电软件访问地址 通过 http://www.cli.im/url生成二维码贴在机器上即可访问
+3. 设备支持WIFI联网，可以有三种方法配网，其中方法一仅适合中国大陆地址，其他两种方法全球适用，方法一，二适合知道WIFI密码的情况，方法三适合不知道WIFI密码，可以按WIFI路由器上的WPS按钮的情况。
+4. 如需要测试设备请联系我公司采购
