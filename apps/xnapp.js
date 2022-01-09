@@ -296,6 +296,34 @@ exports.mainHandler = async (payload) => {
                 } catch (err) {
                   console.log(err);
                 }
+                let precertcnts = 0;
+                try {
+                  let iotdata = await iotclient.send(new DescribeThingCommand({thingName:mac}));
+                  precertcnts = Number(iotdata.attributes.certcnts);
+                  if ( isNaN(precertcnts) ) precertcnts = 0;
+                } catch (err) {
+                  console.error(err);
+                }
+                precertcnts++;
+                let nowtm = moment(new Date().getTime()).tz(config.TZ).format(config.SF);
+                let updatethingParams = {
+                  thingName: mac,
+                  attributePayload: {
+                    attributes: {
+                      'lastmac': mac,
+                      'certcnts': precertcnts.toString(),
+                      'ipaddress': '127.0.0.1',
+                      'onltime': nowtm,
+                      'connected': '0'
+                    },
+                    merge: true
+                  }
+                };
+                try {
+                  await iotclient.send(new UpdateThingCommand(updatethingParams));
+                } catch (err) {
+                  console.log(err);
+                }
             }
         }
     }

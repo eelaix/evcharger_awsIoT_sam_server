@@ -144,7 +144,7 @@ exports.mainHandler = async (event, context, callback) => {
                     item.gunstandard = Number(iotdata.things[i].attributes.gunstandard);
                     item.chargertype = Number(iotdata.things[i].attributes.chargertype);
                     item.ipaddress = iotdata.things[i].attributes.ipaddress;
-                    item.imax = iotdata.things[i].attributes.imax;
+                    item.imax = iotdata.things[i].attributes.imax.split(',');
                     item.location = await config.getipcity(item.ipaddress);
                     item.guestok = Number(iotdata.things[i].attributes.guestok);
                     if (isNaN(item.connected)) item.connected = 0;
@@ -240,7 +240,7 @@ exports.mainHandler = async (event, context, callback) => {
               iotdata = undefined;
             }
             result.mac = mac;
-            let cpid = otdata.attributes.cpid;
+            let cpid = iotdata.attributes.cpid;
             if (cpid==undefined) cpid = '0';/*三相单枪或单相单枪时,CP电路的编号,仅在服务器使用，不下发到设备，不影响设备*/
             result.guestok = Number(iotdata.attributes.guestok);
             result.chargertype = Number(iotdata.attributes.chargertype);
@@ -462,6 +462,37 @@ exports.mainHandler = async (event, context, callback) => {
               attributePayload: {
                 attributes: {
                   'guestok': guestok
+                },
+                merge: true
+              }
+            };
+            try {
+              await iotclient.send(new UpdateThingCommand(updatethingParams));
+              ret.rc = 1;
+            } catch (err) {
+              ret.rc = -2;
+              console.log(err);
+            }
+          } else {
+            ret.rc = -1;
+          }
+          response.body = JSON.stringify(ret);
+          callback(null, response);
+        } else if (apiname=='setimax') {  //imax=32,16,16
+          let ret = {rc:0};
+          let uid = event.queryStringParameters.userid;
+          let getparam = { TableName: 'evuser', Key: {id:{S:uid}} };
+          let useritem = (await ddbclient.send(new GetItemCommand(getparam))).Item;
+          let usertype = 0;
+          if (useritem) usertype = useritem.utype.N;
+          if ( usertype == 9 ) {
+            let imax = event.queryStringParameters.imax;
+            let mac = event.queryStringParameters.mac;
+            let updatethingParams = {
+              thingName: mac,
+              attributePayload: {
+                attributes: {
+                  'imax': imax
                 },
                 merge: true
               }
