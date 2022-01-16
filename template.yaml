@@ -4,7 +4,7 @@
 ###############################################################################
 AWSTemplateFormatVersion: '2010-09-09'
 Transform: AWS::Serverless-2016-10-31
-Description: 'iot.mosf.cn nx'
+Description: 'evcharger awsIoT sam server'
 
 Parameters:
   TimeZone:
@@ -30,7 +30,7 @@ Parameters:
     Default: 0
   SimpleGunCPid:
     Type: String
-    Default: 0
+    Default: 2
   AWSRegion:
     Type: String
     Default: cn-northwest-1
@@ -39,10 +39,10 @@ Parameters:
     Default: a1mnz5pmyqnami-ats.iot.cn-northwest-1.amazonaws.com.cn
   IOTServerURL:
     Type: String
-    Default: https://iot.cn-northwest-1.amazonaws.com
+    Default: https://iot.cn-northwest-1.amazonaws.com.cn
   DDBServerURL:
     Type: String
-    Default: https://dynamodb.cn-northwest-1.amazonaws.com
+    Default: https://dynamodb.cn-northwest-1.amazonaws.com.cn
 
     # 一定要记得修改config.js中的策略文档模板 POLICY_DOCUMENT
 
@@ -72,7 +72,6 @@ Parameters:
 
 Globals:
   Function:
-    Timeout: 10
     CodeUri: apps/
     Runtime: nodejs14.x
     Layers:
@@ -106,6 +105,7 @@ Resources:
           DDB_Server_URL: !Ref DDBServerURL
           IOT_Server_URL: !Ref IOTServerURL
           IOT_Data_ENDPOINT: !Ref IotDataEndpoint
+          Simple_Gun_CPid: !Ref SimpleGunCPid
 
   iotappFunction:
     Timeout: 5
@@ -130,12 +130,11 @@ Resources:
           DDB_Server_URL: !Ref DDBServerURL
           IOT_Server_URL: !Ref IOTServerURL
           IOT_Data_ENDPOINT: !Ref IotDataEndpoint
-          Simple_Gun_CPid: !Ref SimpleGunCPid
   iotapp:
     Type: AWS::Serverless::HttpApi
     Properties:
-      CorsConfiguration: 
-        AllowOrigins: 
+      CorsConfiguration:
+        AllowOrigins:
           - "http://iot.mosf.cn"
           - "http://iot.xnexcharger.com"
       StageName:
@@ -201,4 +200,3 @@ Resources:
       ProvisionedThroughput:
         ReadCapacityUnits: 0
         WriteCapacityUnits: 0
-

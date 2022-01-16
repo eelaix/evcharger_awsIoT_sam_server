@@ -3,7 +3,7 @@ version = 0.1
 [default.deploy]
 [default.deploy.parameters]
 stack_name = "xniotstack"
-s3_bucket = "aws-sam-cli-managed-default-samclisourcebucket-rtuz6s93jvnf"
+s3_bucket = "aws-sam-cli-managed-default-123456"
 s3_prefix = "xniotstack"
 region = "cn-northwest-1"
 capabilities = "CAPABILITY_IAM"

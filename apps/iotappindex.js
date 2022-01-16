@@ -18,7 +18,6 @@ const ddbclient = new DynamoDBClient(iotCONFIG);
 let response = { statusCode: 200, body: 'OK' };
 
 exports.mainHandler = async (event, context, callback) => {
-    console.log(event);
     let apiname = event.pathParameters.proxy || '';
     console.warn(apiname,'qry,'+JSON.stringify(event.queryStringParameters));
     try {
@@ -128,9 +127,12 @@ exports.mainHandler = async (event, context, callback) => {
                   if ( iotdata.nextToken ) {
                     result.nextToken = iotdata.nextToken;
                   }
-                  let item,getParam,shadow,payload,shadowtsmeta,beep,beepkeyid;
+                  let item,getParam,shadow,payload,shadowtsmeta,beep,beepkeyid='non';
                   for (let i=0;i<iotdata.things.length;i++) {
+                    if ( iotdata.things[i].thingTypeName != config.DEFAULT_THINGTYPE ) continue;
                     item = {};
+                    let cpid = iotdata.things[i].attributes.cpid;
+                    if (cpid==undefined) cpid = '2';
                     item.chargerid = iotdata.things[i].attributes.chargerid;
                     item.mac = iotdata.things[i].thingName;
                     item.pot = iotdata.things[i].attributes.pot;
@@ -157,13 +159,14 @@ exports.mainHandler = async (event, context, callback) => {
                       shadowtsmeta = payload.metadata.reported;
                       beep = 0;
                       Object.keys(shadowtsmeta).forEach((key) => {
-                        if (key.length==3 && shadowtsmeta[key].timestamp>beep) {
+                        if (key.length==3 && shadowtsmeta[key].timestamp>beep && key!='pid' && key!='stp') {
                           beep = shadowtsmeta[key].timestamp;
-                          beepkeyid = config.shadowkeys[key];
+                          beepkeyid = key;
                         }
                       });
-                      item.beeptime = moment(beep*1000).tz(config.TZ).format(config.TF);
-                      item.beepkeyid = beepkeyid;
+
+                      item.beeptime = moment(beep*1000).tz(config.TZ).format(config.ST);
+                      item.keyid = beepkeyid;
                       item.rebootdate = item.pot.substr(0,4)+'-'+item.pot.substr(4,2)+'-'+item.pot.substr(6,2);
                       item.onlinedate = item.onltime.substr(0,4)+'-'+item.onltime.substr(4,2)+'-'+item.onltime.substr(6,2);
                       item.offdate = item.offtime.substr(0,4)+'-'+item.offtime.substr(4,2)+'-'+item.offtime.substr(6,2);
@@ -196,8 +199,8 @@ exports.mainHandler = async (event, context, callback) => {
                         item.pw0 = item.pw0+item.pw1+item.pw2;
                         item.pwa = item.pw0<10000?(item.pw0/1000).toFixed(3):(item.pw0<100000?(item.pw0/1000).toFixed(2):(item.pw0<1000000?(item.pw0/1000).toFixed(1):((item.pw0/1000).toFixed(0))));
                       } else if (item.chargertype==1) {
-                        item.ecurrent = ((payload.state.reported.ix0+payload.state.reported.ix1+payload.state.reported.ix2)/1000).toFixed(1)+'A';
-                        item.pwa = item.pw0<10000?(item.pw0/1000).toFixed(3):(item.pw0<100000?(item.pw0/1000).toFixed(2):(item.pw0<1000000?(item.pw0/1000).toFixed(1):((item.pw0/1000).toFixed(0))));
+                        item.ecurrent = ((payload.state.reported['ix'+cpid])/1000).toFixed(1)+'A';
+                        item.pwa = item['pw'+cpid]<10000?(item['pw'+cpid]/1000).toFixed(3):(item['pw'+cpid]<100000?(item['pw'+cpid]/1000).toFixed(2):(item['pw'+cpid]<1000000?(item['pw'+cpid]/1000).toFixed(1):((item['pw'+cpid]/1000).toFixed(0))));
                       } else {
                         item.ecurrent = (payload.state.reported.ix0/1000).toFixed(0)+'/'+(payload.state.reported.ix1/1000).toFixed(1)+'/'+(payload.state.reported.ix2/1000).toFixed(0);
                         item.pwa = (item.pw0/1000).toFixed(0)+'/'+(item.pw1/1000).toFixed(3)+'/'+(item.pw2/1000).toFixed(3);
@@ -241,7 +244,7 @@ exports.mainHandler = async (event, context, callback) => {
             }
             result.mac = mac;
             let cpid = iotdata.attributes.cpid;
-            if (cpid==undefined) cpid = '0';/*三相单枪或单相单枪时,CP电路的编号,仅在服务器使用，不下发到设备，不影响设备*/
+            if (cpid==undefined) cpid = '2';/*三相单枪或单相单枪时,CP电路的编号,仅在服务器使用，不下发到设备，不影响设备*/
             result.guestok = Number(iotdata.attributes.guestok);
             result.chargertype = Number(iotdata.attributes.chargertype);
             result.gunstandard = Number(iotdata.attributes.gunstandard);
@@ -307,7 +310,7 @@ exports.mainHandler = async (event, context, callback) => {
             } else {
               result.stateid = 6;
             }
-            result.imax = '32,0,0';//iotdata.attributes.imax.split(',');
+            result.imax = iotdata.attributes.imax.split(',');
             for (let i=0;i<result.imax.length;i++) {
               result.imax[i] = Number(result.imax[i]);
             }
@@ -504,6 +507,20 @@ exports.mainHandler = async (event, context, callback) => {
               ret.rc = -2;
               console.log(err);
             }
+            imax = imax.split(',');
+            for (let i=0;i<imax.length;i++) {
+              imax[i] = Number(imax[i]);
+            }
+            let pubparam = {
+              topic: 'xniot/work/'+mac,
+              payload: Buffer.from(JSON.stringify({'limit':imax})),
+              qos: 1
+            };
+            try {
+              await iotdataclient.send(new PublishCommand(pubparam));
+            } catch (err) {
+              console.log(err);
+            }
           } else {
             ret.rc = -1;
           }
@@ -606,15 +623,29 @@ exports.mainHandler = async (event, context, callback) => {
           response.body = JSON.stringify(ret);
           callback(null, response);
         } else if (apiname=='index.html') {
-            let nowtmstr = moment(new Date().getTime()).tz(config.TZ).format(config.TF);
-            response.headers['content-type'] = 'text/plain';
-            response.body = 'iotappServer: ' + nowtmstr + ' @ ' + config.APIVERSION;
-            return response;
+          let ipaddress = event.requestContext.http.sourceIp;
+          let useragent = event.requestContext.http.userAgent;
+          let ua = uaparser(useragent);
+          let uadevice = ua.device.model;
+          if (!uadevice) {
+            uadevice = ua.device.vendor;
+          }
+          if (!uadevice) {
+            uadevice = ua.os.name;
+          }
+          let uabrowser = ua.browser.name;
+          if (!uabrowser) {
+            uabrowser = '(unknown)';
+          }
+          let nowtmstr = moment(new Date().getTime()).tz(config.TZ).format(config.TF);
+          response.headers = {'content-type':'text/html'};
+          response.body = '<b>xiaoniu EvCharger AppServer.</b><br/>Author: Shenzhen Xiaoniu New Energy Company.<br/>TimeNow: ' + nowtmstr + '<br/>AppVer: ' + config.APIVERSION + '<br/>YourIP: ' + ipaddress + '<br/>Browser: ' + uadevice + '/' + uabrowser;
+          return response;
         } else {
-            console.warn(apiname, 'qry,'+JSON.stringify(event.queryStringParameters)+',env,'+JSON.stringify(process.env, null, 2));
-            response.body = 'NOT FOUND';
-            response.statusCode = 404;
-            callback(null, response);
+          console.warn(apiname, 'qry,'+JSON.stringify(event.queryStringParameters)+',env,'+JSON.stringify(process.env, null, 2));
+          response.body = 'NOT FOUND';
+          response.statusCode = 404;
+          callback(null, response);
         }
     } catch (err) {
         console.error(err);

@@ -83,7 +83,7 @@ let issueCert = async ( mac ) => {
           'chargertype':config.DEFAULT_CHARGERTYPE,
           'gunstandard':config.DEFAULT_GUNSTANDARD,
           'guestok':config.DEFAULT_GUESTOK,
-          'imax':'32,0,0',
+          'imax':'0,0,32',
           'fmver':'1.0.0',
           'debug':'1',
           'pon':'1',
@@ -238,8 +238,8 @@ exports.mainHandler = async (payload) => {
           let gunstandard = 1; //单相单枪
           try {
             let iotdata = await iotclient.send(new DescribeThingCommand({thingName:mac}));
-            let imaxstr = iotdata.attributes.imax.split(',');
-            imax[0] = Number(imaxstr[0]); imax[1] = Number(imaxstr[1]); imax[2] = Number(imaxstr[3]);
+            imax = iotdata.attributes.imax.split(',');
+            for (let i=0;i<imax.length;i++) imax[i] = Number(imax[i]);
             chargerid = iotdata.attributes.chargerid;
             chargertype = Number(iotdata.attributes.chargertype);
             gunstandard = Number(iotdata.attributes.gunstandard);
