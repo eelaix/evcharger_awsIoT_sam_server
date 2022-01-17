@@ -45,27 +45,32 @@ exports.mainHandler = async (event, context, callback) => {
             if (!uabrowser) {
               uabrowser = '(unknown)';
             }
-            let last = moment(new Date().getTime()).tz(config.TZ).format(config.SF);
-            if (useritem) {
-                if ( useritem.utype ) {
-                  usertype = useritem.utype.N;
-                }
-                if ( useritem.uflag ) {
-                  userflag = useritem.uflag.S;
-                }
-                let updateparam = { TableName: 'evuser', Key: {id:{S:uid}},
-                  UpdateExpression: 'SET lastvisit=:last,uadevice=:uadev,uabrowser=:uabr,ipaddress=:ipadd',
-                  ExpressionAttributeValues:{':last':{S:last},':uadev':{S:uadevice},':uabr':{S:uabrowser},':ipadd':{S:ipaddress}}
-                };
-                await ddbclient.send(new UpdateItemCommand(updateparam));
+            if ( uabrowser == 'WeChat' ) {
+              usertype = -1;
             } else {
-                uid = await nanoid();  //21位包含_-
-                // utype: 0 普通用户，1账单组管理者，由超级管理者升级，用户ID为账单组，账单组内设备由超级管理者分配 9超级管理者        ,permedthing:{SS:[]}
-                let putparam = { TableName: 'evuser', Item: {
-                      id:{S:uid},utype:{N:'0'},lastvisit:{S:last},regtime:{S:last},uadevice:{S:uadevice},uabrowser:{S:uabrowser},ipaddress:{S:ipaddress}
-                    }
-                };
-                await ddbclient.send(new PutItemCommand(putparam));
+              let last = moment(new Date().getTime()).tz(config.TZ).format(config.SF);
+              if (useritem) {
+                  if ( useritem.utype ) {
+                    usertype = useritem.utype.N;
+                  }
+                  if ( useritem.uflag ) {
+                    userflag = useritem.uflag.S;
+                  }
+                  let updateparam = { TableName: 'evuser', Key: {id:{S:uid}},
+                    UpdateExpression: 'SET lastvisit=:last,uadevice=:uadev,uabrowser=:uabr,ipaddress=:ipadd',
+                    ExpressionAttributeValues:{':last':{S:last},':uadev':{S:uadevice},':uabr':{S:uabrowser},':ipadd':{S:ipaddress}}
+                  };
+                  await ddbclient.send(new UpdateItemCommand(updateparam));
+              } else {
+                  uid = await nanoid();  //21位包含_-
+                  // utype: 0 普通用户，1账单组管理者，由超级管理者升级，用户ID为账单组，账单组内设备由超级管理者分配 9超级管理者        ,permedthing:{SS:[]}
+                  let putparam = { TableName: 'evuser', Item: {
+                        id:{S:uid},utype:{N:'0'},lastvisit:{S:last},regtime:{S:last},
+                        uadevice:{S:uadevice},uabrowser:{S:uabrowser},ipaddress:{S:ipaddress},chgtimes:{N:'0'},powall:{N:'0'}
+                      }
+                  };
+                  await ddbclient.send(new PutItemCommand(putparam));
+              }
             }
             response.body = JSON.stringify({id:uid,utype:usertype,uflag:userflag});
             callback(null, response);
@@ -215,6 +220,86 @@ exports.mainHandler = async (event, context, callback) => {
             }
             response.body = JSON.stringify(result);
             callback(null, response);
+        } else if (apiname=='listusers') {
+            let result = {nextToken:undefined,items:[]};
+            let uid = event.queryStringParameters.userid;
+            let getparam = { TableName: 'evuser', Key: {id:{S:uid}} };
+            let useritem = (await ddbclient.send(new GetItemCommand(getparam))).Item;
+            let usertype = 0;
+            if (useritem && useritem.utype) usertype = useritem.utype.N;
+            if ( usertype == 9 ) {
+              let search = event.queryStringParameters.search;
+              let utype = event.queryStringParameters.utype||'0';
+              let _id,_regtime,_lastvisit,_utype,_powall,_uadevice,_uabrowser,_ipaddress,_chgtimes,_uflag;
+              if ( search ) {
+                let key2 = {
+                  'utype':{ComparisonOperator:'EQ',AttributeValueList:[{N:utype}]},
+                  'uflag':{ComparisonOperator:'BEGINS_WITH',AttributeValueList:[{S:search}]}
+                };
+                let qryparam2 = {TableName:'evuser', KeyConditions:key2, IndexName: 'gsi_uflag' };
+                console.log(JSON.stringify(qryparam2));
+                let searchdata = await ddbclient.send(new QueryCommand(qryparam2));
+                console.log(JSON.stringify(searchdata));
+                for (let i=0;i<searchdata.Items.length;i++) {
+                  getparam.Key.id.S = searchdata.Items[i].id.S;
+                  useritem = (await ddbclient.send(new GetItemCommand(getparam))).Item;
+                  if (useritem.uflag) {
+                    _uflag = useritem.uflag.S;
+                  } else {
+                    _uflag = '-';
+                  }
+                  _id = useritem.id.S;
+                  _regtime = useritem.regtime.S;
+                  _uadevice = useritem.uadevice.S;
+                  _uabrowser = useritem.uabrowser.S;
+                  _ipaddress = useritem.ipaddress.S;
+                  _lastvisit = useritem.lastvisit.S;
+                  _utype = Number(useritem.utype.N);
+                  _powall = Number(useritem.powall.N);
+                  _chgtimes = Number(useritem.chgtimes.N);
+                  _regtime = _regtime.substr(0,4)+'-'+_regtime.substr(4,2)+'-'+_regtime.substr(6,2);
+                  _lastvisit = _lastvisit.substr(4,2)+'-'+_lastvisit.substr(6,2)+' '+_lastvisit.substr(8,2)+':'+_lastvisit.substr(10,2);
+                  result.items.push({id:_id,regtime:_regtime,lastvisit:_lastvisit,utype:_utype,powall:_powall,
+                      uadevice:_uadevice,uabrowser:_uabrowser,ipaddress:_ipaddress,chgtimes:_chgtimes,uflag:_uflag});
+                }
+              } else {
+                let sort = event.queryStringParameters.sort||'0';
+                let idxname = 'gsi_lastvisit';
+                if (sort=='1') {
+                  idxname = 'gsi_regtime';
+                }
+                let key3 = {'utype':{ComparisonOperator:'EQ',AttributeValueList:[{N:utype}]}};
+                let qryparam3 = {TableName:'evuser', KeyConditions:key3, IndexName:idxname, ScanIndexForward:false, Limit:12 };
+                console.log(JSON.stringify(qryparam3));
+                let searchdata = await ddbclient.send(new QueryCommand(qryparam3));
+                console.log(JSON.stringify(searchdata));
+                for (let i=0;i<searchdata.Items.length;i++) {
+                  getparam.Key.id.S = searchdata.Items[i].id.S;
+                  useritem = (await ddbclient.send(new GetItemCommand(getparam))).Item;
+                  if (useritem.uflag) {
+                    _uflag = useritem.uflag.S;
+                  } else {
+                    _uflag = '-';
+                  }
+                  _id = useritem.id.S;
+                  _regtime = useritem.regtime.S;
+                  _uadevice = useritem.uadevice.S;
+                  _uabrowser = useritem.uabrowser.S;
+                  _ipaddress = useritem.ipaddress.S;
+                  _lastvisit = useritem.lastvisit.S;
+                  _utype = Number(useritem.utype.N);
+                  _powall = Number(useritem.powall.N);
+                  _chgtimes = Number(useritem.chgtimes.N);
+                  _regtime = _regtime.substr(0,4)+'-'+_regtime.substr(4,2)+'-'+_regtime.substr(6,2);
+                  _lastvisit = _lastvisit.substr(4,2)+'-'+_lastvisit.substr(6,2)+' '+_lastvisit.substr(8,2)+':'+_lastvisit.substr(10,2);
+                  result.items.push({id:_id,regtime:_regtime,lastvisit:_lastvisit,utype:_utype,powall:_powall,
+                    uadevice:_uadevice,uabrowser:_uabrowser,ipaddress:_ipaddress,chgtimes:_chgtimes,uflag:_uflag});
+              }
+                if (searchdata.LastEvaluatedKey) result.nextToken = searchdata.LastEvaluatedKey;
+              }
+            }
+            response.body = JSON.stringify(result);
+            callback(null, response);
         } else if (apiname=='getcharger') {
           let result = {mac:'',guestok:1,chargertype:0,gunstandard:0,connected:0,ver:'0.0.0',pnp:0,stp:0,dor:0,lgd:0,st0:0,st1:0,st2:0,pw0:0,pw1:0,pw2:0,pw3:0,ix0:0,ix1:0,ix2:0,tp0:0,tp1:0,cp0:0,cp1:0,cp2:0,cz0:0,cz1:0,cz2:0};
           let chargerid = event.queryStringParameters.chargerid;
@@ -270,6 +355,11 @@ exports.mainHandler = async (event, context, callback) => {
               result.pwa = payload.state.reported['pw'+cpid];
               if ( result.chargertype == 0 ) {
                 result.pwa = payload.state.reported.pw0+payload.state.reported.pw1+payload.state.reported.pw2;
+              }
+              if (result.chargertype==1 && cpid=='2') {
+                result.tp0 = payload.state.reported.tp2-100;
+                result.tp1 = payload.state.reported.tp1-100;
+                result.tp2 = payload.state.reported.tp0-100;
               }
             } else {
               result.sta = payload.state.reported['st'+gunid];
@@ -374,6 +464,11 @@ exports.mainHandler = async (event, context, callback) => {
             } catch (err) {
               console.log(err);
             }
+            let updateparam = { TableName: 'evuser', Key: {id:{S:uid}},
+              UpdateExpression: 'SET chgtimes=chgtimes+:add',
+              ExpressionAttributeValues:{':add':{N:'1'}}
+            };
+            await ddbclient.send(new UpdateItemCommand(updateparam));  
           }
           response.body = JSON.stringify({rc:errcode});
           callback(null, response);

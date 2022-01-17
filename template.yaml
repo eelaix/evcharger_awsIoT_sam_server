@@ -184,7 +184,13 @@ Resources:
       AttributeDefinitions:
         - AttributeName: id
           AttributeType: S
+        - AttributeName: utype
+          AttributeType: N
         - AttributeName: uflag
+          AttributeType: S
+        - AttributeName: regtime
+          AttributeType: S
+        - AttributeName: lastvisit
           AttributeType: S
       KeySchema:
         - AttributeName: id
@@ -192,8 +198,26 @@ Resources:
       GlobalSecondaryIndexes:
         - IndexName: gsi_uflag
           KeySchema:
-            - AttributeName: uflag
+            - AttributeName: utype
               KeyType: HASH
+            - AttributeName: uflag
+              KeyType: RANGE
+          Projection:
+            ProjectionType: KEYS_ONLY
+        - IndexName: gsi_regtime
+          KeySchema:
+            - AttributeName: utype
+              KeyType: HASH
+            - AttributeName: regtime
+              KeyType: RANGE
+          Projection:
+            ProjectionType: KEYS_ONLY
+        - IndexName: gsi_lastvisit
+          KeySchema:
+            - AttributeName: utype
+              KeyType: HASH
+            - AttributeName: lastvisit
+              KeyType: RANGE
           Projection:
             ProjectionType: KEYS_ONLY
       BillingMode: PAY_PER_REQUEST
