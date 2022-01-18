@@ -152,7 +152,6 @@ exports.mainHandler = async (event, context, callback) => {
                     item.chargertype = Number(iotdata.things[i].attributes.chargertype);
                     item.ipaddress = iotdata.things[i].attributes.ipaddress;
                     item.imax = iotdata.things[i].attributes.imax.split(',');
-                    item.location = await config.getipcity(item.ipaddress);
                     item.guestok = Number(iotdata.things[i].attributes.guestok);
                     if (isNaN(item.connected)) item.connected = 0;
                     if (isNaN(item.gunstandard)) item.gunstandard = 0;

@@ -72,6 +72,7 @@ Parameters:
 
 Globals:
   Function:
+    Timeout: 5
     CodeUri: apps/
     Runtime: nodejs14.x
     Layers:
@@ -80,8 +81,8 @@ Globals:
 Resources:
 
   xnappFunction:
-    Timeout: 5
     Type: AWS::Serverless::Function
+    Description: Code for IoT Rule
     Properties:
       Role: !GetAtt xniotsamRole.Arn
       Handler: xnapp.mainHandler
@@ -108,8 +109,8 @@ Resources:
           Simple_Gun_CPid: !Ref SimpleGunCPid
 
   iotappFunction:
-    Timeout: 5
     Type: AWS::Serverless::Function
+    Description: HTTP API for Web Client
     Properties:
       Role: !GetAtt xniotsamRole.Arn
       Handler: iotappindex.mainHandler
