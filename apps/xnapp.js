@@ -80,16 +80,14 @@ let issueCert = async ( mac ) => {
           'chargerid':'0',
           'connected':'0',
           'offtime':nowtm,
-          'chargertype':config.DEFAULT_CHARGERTYPE,
           'gunstandard':config.DEFAULT_GUNSTANDARD,
           'guestok':config.DEFAULT_GUESTOK,
-          'imax':'0,0,32',
+          'imax':'0,0',
           'fmver':'1.0.0',
           'debug':'1',
           'pon':'1',
-          'pnp':'1',
-          'sipg':'1',
-          'cpid':config.SIMPLE_GUN_CPID,/*三相单枪或单相单枪时,CP电路的编号,仅在服务器使用，不下发到设备，不影响设备*/
+          'swk':'0',
+          'gunstyle':'0',
           'pot':nowtm,
           'ipaddress':'127.0.0.1'
         },
@@ -205,13 +203,12 @@ exports.mainHandler = async (payload) => {
         if (payload.guc) {
         }
         if (payload.firstboot) {
-          //{\"firstboot\":1,\"wifimac\":\"%.*s\",\"ver\":\"%1d.%1d.%1d\",\"dbg\":%1d,\"pon\":%10ld,\"pnp\":%1d,\"sig\":%1d}
+          //{\"firstboot\":1,\"wifimac\":\"%.*s\",\"ver\":\"%1d.%1d.%1d\",\"dbg\":%1d,\"pon\":%10ld,swk:111,gun:1}
           let nowtm = moment(new Date().getTime()).tz(config.TZ).format(config.SF);
           let fmver = payload.ver;
           let debug = payload.dbg;
           let pon = payload.pon;
-          let pnp = payload.pnp;
-          let sipg = payload.sig;
+          let swk = payload.swk; //拨码开关状态111
           let updatethingParams = {
             thingName: mac,
             attributePayload: {
@@ -219,9 +216,8 @@ exports.mainHandler = async (payload) => {
                 'pot': nowtm,
                 'pon': pon.toString(),
                 'fmver': fmver,
+                'swk': swk.toString(),
                 'debug': debug.toString(),
-                'sipg': sipg.toString(),
-                'pnp': pnp.toString(),
                 'connected': '1'
               },
               merge: true
@@ -232,21 +228,19 @@ exports.mainHandler = async (payload) => {
           } catch (err) {
             console.log(err);
           }
-          let imax = [32,32,32];
+          let imax = [32,32];
           let chargerid = '000000';
           let chargertype = 0; //美标
-          let gunstandard = 1; //单相单枪
           try {
             let iotdata = await iotclient.send(new DescribeThingCommand({thingName:mac}));
             imax = iotdata.attributes.imax.split(',');
             for (let i=0;i<imax.length;i++) imax[i] = Number(imax[i]);
             chargerid = iotdata.attributes.chargerid;
-            chargertype = Number(iotdata.attributes.chargertype);
             gunstandard = Number(iotdata.attributes.gunstandard);
           } catch (err) {
             console.error(err);
           }
-          let outjson = {'firstboot':{'limit':imax,'chargerid':chargerid,'chargertype':chargertype,'gunstandard':gunstandard}};
+          let outjson = {'firstboot':{'limit':imax,'chargerid':chargerid}};
           let pubparam = {
             topic: 'xniot/work/'+mac,
             payload: Buffer.from(JSON.stringify(outjson)),
@@ -261,6 +255,14 @@ exports.mainHandler = async (payload) => {
         if (payload.getcert) {
             if (mac=='xniotevesps2') {
                 let wifimac = payload.wifimac;
+                let gunstyle = payload.gun;
+                let imax = '32,32';
+                if ( gunstyle == 1 ) {
+                    imax = '0,32';
+                } else if ( gunstyle == 2 ) {
+                    imax = '32,0';
+                }
+                gunstyle = ''+gunstyle;
                 let data = await listPolicyPrincipals( wifimac );
                 let certArn = false;
                 if (data && data.principals && data.principals.length>0) {
@@ -298,7 +300,7 @@ exports.mainHandler = async (payload) => {
                 }
                 let precertcnts = 0;
                 try {
-                  let iotdata = await iotclient.send(new DescribeThingCommand({thingName:mac}));
+                  let iotdata = await iotclient.send(new DescribeThingCommand({thingName:'xniotevesps2'}));
                   precertcnts = Number(iotdata.attributes.certcnts);
                   if ( isNaN(precertcnts) ) precertcnts = 0;
                 } catch (err) {
@@ -307,14 +309,26 @@ exports.mainHandler = async (payload) => {
                 precertcnts++;
                 let nowtm = moment(new Date().getTime()).tz(config.TZ).format(config.SF);
                 let updatethingParams = {
-                  thingName: mac,
+                  thingName: 'xniotevesps2',//没有类型的物品，attributes不能超过三个
                   attributePayload: {
                     attributes: {
-                      'lastmac': mac,
-                      'certcnts': precertcnts.toString(),
-                      'ipaddress': '127.0.0.1',
-                      'onltime': nowtm,
-                      'connected': '0'
+                      'lastmac': wifimac,
+                      'certcnts': ''+precertcnts,
+                      'certime': nowtm
+                    }
+                  }
+                };
+                try {
+                  await iotclient.send(new UpdateThingCommand(updatethingParams));
+                } catch (err) {
+                  console.log(err);
+                }
+                updatethingParams = {
+                  thingName: wifimac,
+                  attributePayload: {
+                    attributes: {
+                      'imax': imax,
+                      'gunstyle': gunstyle
                     },
                     merge: true
                   }

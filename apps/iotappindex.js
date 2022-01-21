@@ -5,7 +5,7 @@ Author: saico@mosf.cn
 
 const { IoTClient,ListThingsCommand,DescribeThingCommand,UpdateThingCommand } = require('@aws-sdk/client-iot');
 const { IoTDataPlaneClient,GetThingShadowCommand,PublishCommand } = require('@aws-sdk/client-iot-data-plane');
-const { DynamoDBClient,GetItemCommand,PutItemCommand,UpdateItemCommand,QueryCommand } = require('@aws-sdk/client-dynamodb');
+const { DynamoDBClient,GetItemCommand,PutItemCommand,UpdateItemCommand,QueryCommand,DeleteItemCommand } = require('@aws-sdk/client-dynamodb');
 const { nanoid } = require('nanoid');
 const config = require('./config');
 const uaparser = require('ua-parser-js');
@@ -136,26 +136,22 @@ exports.mainHandler = async (event, context, callback) => {
                   for (let i=0;i<iotdata.things.length;i++) {
                     if ( iotdata.things[i].thingTypeName != config.DEFAULT_THINGTYPE ) continue;
                     item = {};
-                    let cpid = iotdata.things[i].attributes.cpid;
-                    if (cpid==undefined) cpid = '2';
                     item.chargerid = iotdata.things[i].attributes.chargerid;
                     item.mac = iotdata.things[i].thingName;
                     item.pot = iotdata.things[i].attributes.pot;
                     item.pon = iotdata.things[i].attributes.pon;
-                    item.sipg = Number(iotdata.things[i].attributes.sipg);
-                    item.pnp = Number(iotdata.things[i].attributes.pnp);
+                    item.swk = Number(iotdata.things[i].attributes.swk);
                     item.onltime = iotdata.things[i].attributes.onltime;
                     item.ver = iotdata.things[i].attributes.fmver;
                     item.offtime = iotdata.things[i].attributes.offtime;
                     item.connected = Number(iotdata.things[i].attributes.connected);
                     item.gunstandard = Number(iotdata.things[i].attributes.gunstandard);
-                    item.chargertype = Number(iotdata.things[i].attributes.chargertype);
                     item.ipaddress = iotdata.things[i].attributes.ipaddress;
                     item.imax = iotdata.things[i].attributes.imax.split(',');
                     item.guestok = Number(iotdata.things[i].attributes.guestok);
+                    item.gunstyle = Number(iotdata.things[i].attributes.gunstyle);
                     if (isNaN(item.connected)) item.connected = 0;
                     if (isNaN(item.gunstandard)) item.gunstandard = 0;
-                    if (isNaN(item.chargertype)) item.chargertype = 0;
                     try {
                       getParam = {thingName:item.mac};
                       shadow = await iotdataclient.send(new GetThingShadowCommand(getParam));
@@ -174,40 +170,40 @@ exports.mainHandler = async (event, context, callback) => {
                       item.rebootdate = item.pot.substr(0,4)+'-'+item.pot.substr(4,2)+'-'+item.pot.substr(6,2);
                       item.onlinedate = item.onltime.substr(0,4)+'-'+item.onltime.substr(4,2)+'-'+item.onltime.substr(6,2);
                       item.offdate = item.offtime.substr(0,4)+'-'+item.offtime.substr(4,2)+'-'+item.offtime.substr(6,2);
-                      item.tp0 = payload.state.reported.tp0-100;
-                      item.tp1 = payload.state.reported.tp1-100;
-                      item.tp2 = payload.state.reported.tp2-100;
                       item.dor = payload.state.reported.dor;
                       item.stp = payload.state.reported.stp;
                       item.lgd = payload.state.reported.lgd;
-                      item.sw0 = payload.state.reported.sw0;
-                      item.sw1 = payload.state.reported.sw1;
-                      item.sw2 = payload.state.reported.sw2;
-                      item.pw0 = payload.state.reported.pw0;
-                      item.pw1 = payload.state.reported.pw1;
-                      item.pw2 = payload.state.reported.pw2;
-                      item.ix0 = payload.state.reported.ix0;
-                      item.ix1 = payload.state.reported.ix1;
-                      item.ix2 = payload.state.reported.ix2;
-                      item.cp0 = payload.state.reported.cp0;
-                      item.cp1 = payload.state.reported.cp1;
-                      item.cp2 = payload.state.reported.cp2;
-                      item.cz0 = payload.state.reported.cz0;
-                      item.cz1 = payload.state.reported.cz1;
-                      item.cz2 = payload.state.reported.cz2;
-                      item.st0 = payload.state.reported.st0;
-                      item.st1 = payload.state.reported.st1;
-                      item.st2 = payload.state.reported.st2;
-                      if (item.chargertype==0) {
-                        item.ecurrent = (payload.state.reported.ix0/1000).toFixed(1)+'x3';
-                        item.pw0 = item.pw0+item.pw1+item.pw2;
-                        item.pwa = item.pw0<10000?(item.pw0/1000).toFixed(3):(item.pw0<100000?(item.pw0/1000).toFixed(2):(item.pw0<1000000?(item.pw0/1000).toFixed(1):((item.pw0/1000).toFixed(0))));
-                      } else if (item.chargertype==1) {
-                        item.ecurrent = ((payload.state.reported['ix'+cpid])/1000).toFixed(1)+'A';
-                        item.pwa = item['pw'+cpid]<10000?(item['pw'+cpid]/1000).toFixed(3):(item['pw'+cpid]<100000?(item['pw'+cpid]/1000).toFixed(2):(item['pw'+cpid]<1000000?(item['pw'+cpid]/1000).toFixed(1):((item['pw'+cpid]/1000).toFixed(0))));
+                      item.tpa = [payload.state.reported.tp0-100,payload.state.reported.tp1-100];
+                      item.swa = [payload.state.reported.sw0,payload.state.reported.sw1];
+                      item.pwa = [payload.state.reported.pw0,payload.state.reported.pw1];
+                      item.ixa = [payload.state.reported.ix0,payload.state.reported.ix1];
+                      item.cpa = [payload.state.reported.cp0,payload.state.reported.cp1];
+                      item.cza = [payload.state.reported.cz0,payload.state.reported.cz1];
+                      item.sta = [payload.state.reported.st0,payload.state.reported.st1];
+                      item.pva = [payload.state.reported.pv0,payload.state.reported.pv1];
+                      item.cpa[0] = (item.cpa[0]/10).toFixed(1);
+                      item.cpa[1] = (item.cpa[1]/10).toFixed(1);
+                      item.cza[0] = (item.cza[0]/10).toFixed(1);
+                      item.cza[1] = (item.cza[1]/10).toFixed(1);
+                      item.ixa[0] = (item.ixa[0]/1000).toFixed(1);
+                      item.ixa[1] = (item.ixa[1]/1000).toFixed(1);
+                      if ( item.pwa[0] < 10000 ) {
+                          item.pwa[0] = (item.pwa[0]/1000).toFixed(3);
+                      } else if ( item.pwa[0] < 100000 ) {
+                          item.pwa[0] = (item.pwa[0]/1000).toFixed(2);
+                      } else if ( item.pwa[0] < 1000000 ) {
+                          item.pwa[0] = (item.pwa[0]/1000).toFixed(1);
                       } else {
-                        item.ecurrent = (payload.state.reported.ix0/1000).toFixed(0)+'/'+(payload.state.reported.ix1/1000).toFixed(1)+'/'+(payload.state.reported.ix2/1000).toFixed(0);
-                        item.pwa = (item.pw0/1000).toFixed(0)+'/'+(item.pw1/1000).toFixed(3)+'/'+(item.pw2/1000).toFixed(3);
+                          item.pwa[0] = (item.pwa[0]/1000).toFixed(0);
+                      }
+                      if ( item.pwa[1] < 10000 ) {
+                          item.pwa[1] = (item.pwa[1]/1000).toFixed(3);
+                      } else if ( item.pwa[1] < 100000 ) {
+                          item.pwa[1] = (item.pwa[1]/1000).toFixed(2);
+                      } else if ( item.pwa[1] < 1000000 ) {
+                          item.pwa[1] = (item.pwa[1]/1000).toFixed(1);
+                      } else {
+                          item.pwa[1] = (item.pwa[1]/1000).toFixed(0);
                       }
                       result.items.push(item);
                     } catch (err) {
@@ -230,15 +226,14 @@ exports.mainHandler = async (event, context, callback) => {
               let search = event.queryStringParameters.search;
               let utype = event.queryStringParameters.utype||'0';
               let _id,_regtime,_lastvisit,_utype,_powall,_uadevice,_uabrowser,_ipaddress,_chgtimes,_uflag;
+              let _permedchargers;
               if ( search ) {
                 let key2 = {
                   'utype':{ComparisonOperator:'EQ',AttributeValueList:[{N:utype}]},
                   'uflag':{ComparisonOperator:'BEGINS_WITH',AttributeValueList:[{S:search}]}
                 };
                 let qryparam2 = {TableName:'evuser', KeyConditions:key2, IndexName: 'gsi_uflag' };
-                console.log(JSON.stringify(qryparam2));
                 let searchdata = await ddbclient.send(new QueryCommand(qryparam2));
-                console.log(JSON.stringify(searchdata));
                 for (let i=0;i<searchdata.Items.length;i++) {
                   getparam.Key.id.S = searchdata.Items[i].id.S;
                   useritem = (await ddbclient.send(new GetItemCommand(getparam))).Item;
@@ -246,6 +241,10 @@ exports.mainHandler = async (event, context, callback) => {
                     _uflag = useritem.uflag.S;
                   } else {
                     _uflag = '-';
+                  }
+                  _permedchargers = [];
+                  if (useritem.permedcharger && useritem.permedcharger.SS) {
+                      _permedchargers = useritem.permedcharger.SS;
                   }
                   _id = useritem.id.S;
                   _regtime = useritem.regtime.S;
@@ -259,7 +258,8 @@ exports.mainHandler = async (event, context, callback) => {
                   _regtime = _regtime.substr(0,4)+'-'+_regtime.substr(4,2)+'-'+_regtime.substr(6,2);
                   _lastvisit = _lastvisit.substr(4,2)+'-'+_lastvisit.substr(6,2)+' '+_lastvisit.substr(8,2)+':'+_lastvisit.substr(10,2);
                   result.items.push({id:_id,regtime:_regtime,lastvisit:_lastvisit,utype:_utype,powall:_powall,
-                      uadevice:_uadevice,uabrowser:_uabrowser,ipaddress:_ipaddress,chgtimes:_chgtimes,uflag:_uflag});
+                      uadevice:_uadevice,uabrowser:_uabrowser,ipaddress:_ipaddress,chgtimes:_chgtimes,uflag:_uflag,
+                      permedcharger:_permedchargers});
                 }
               } else {
                 let sort = event.queryStringParameters.sort||'0';
@@ -300,7 +300,7 @@ exports.mainHandler = async (event, context, callback) => {
             response.body = JSON.stringify(result);
             callback(null, response);
         } else if (apiname=='getcharger') {
-          let result = {mac:'',guestok:1,chargertype:0,gunstandard:0,connected:0,ver:'0.0.0',pnp:0,stp:0,dor:0,lgd:0,st0:0,st1:0,st2:0,pw0:0,pw1:0,pw2:0,pw3:0,ix0:0,ix1:0,ix2:0,tp0:0,tp1:0,cp0:0,cp1:0,cp2:0,cz0:0,cz1:0,cz2:0};
+          let result = {mac:'',guestok:1,gunstyle:1,gunstandard:0,connected:0,ver:'0.0.0',swk:0,stp:0,dor:0,lgd:0,sta:[0,0],pwa:[0,0],ixa:[0,0],tpa:[0,0],cpa:[0,0],cza:[0,0],pva:[0,0]};
           let chargerid = event.queryStringParameters.chargerid;
           let gunid = Number(event.queryStringParameters.gunid)||0;
           let loads = event.queryStringParameters.loads;
@@ -327,61 +327,63 @@ exports.mainHandler = async (event, context, callback) => {
               iotdata = undefined;
             }
             result.mac = mac;
-            let cpid = iotdata.attributes.cpid;
-            if (cpid==undefined) cpid = '2';/*三相单枪或单相单枪时,CP电路的编号,仅在服务器使用，不下发到设备，不影响设备*/
             result.guestok = Number(iotdata.attributes.guestok);
-            result.chargertype = Number(iotdata.attributes.chargertype);
+            result.gunstyle = Number(iotdata.attributes.gunstyle);
             result.gunstandard = Number(iotdata.attributes.gunstandard);
             result.connected = Number(iotdata.attributes.connected);
+            result.swk = Number(iotdata.attributes.swk);
+            result.imax = iotdata.attributes.imax.split(',');
             result.ver = iotdata.attributes.fmver;
-            result.pnp = Number(iotdata.attributes.pnp);
+            if (result.gunstyle==1) {
+                gunid = 1;
+            } else if (result.gunstyle==2) {
+                gunid = 0;
+            } else {
+                if (gunid==-1) gunid = 0;
+            }
             let shadow = await iotdataclient.send(new GetThingShadowCommand(descparam));
             let payload = JSON.parse(String.fromCharCode.apply(null, new Uint8Array(shadow.payload)));
-            result.tp0 = payload.state.reported.tp0-100;
-            result.tp1 = payload.state.reported.tp1-100;
-            result.tp2 = payload.state.reported.tp2-100;
             result.stp = payload.state.reported.stp;
             result.dor = payload.state.reported.dor;
             result.lgd = payload.state.reported.lgd;
-            if ( result.chargertype < 2 ) {  //0=三相电，1=单相单枪
-              result.sta = payload.state.reported['st'+cpid];
-              result.swa = payload.state.reported['sw'+cpid];
-              result.ixa = payload.state.reported['ix'+cpid];
-              result.ixa = result.ixa>10000?(result.ixa/1000).toFixed(0):(result.ixa/1000).toFixed(1);
-              if ( result.chargertype == 0 ) result.ixa = result.ixa + 'x3';
-              result.cpa = (payload.state.reported['cp'+cpid]/10).toFixed(1);
-              result.cza = (payload.state.reported['cz'+cpid]/10).toFixed(1);
-              result.pwa = payload.state.reported['pw'+cpid];
-              if ( result.chargertype == 0 ) {
-                result.pwa = payload.state.reported.pw0+payload.state.reported.pw1+payload.state.reported.pw2;
-              }
-              if (result.chargertype==1 && cpid=='2') {
-                result.tp0 = payload.state.reported.tp2-100;
-                result.tp1 = payload.state.reported.tp1-100;
-                result.tp2 = payload.state.reported.tp0-100;
-              }
+            result.tpa = [payload.state.reported.tp0-100,payload.state.reported.tp1-100];
+            result.swa = [payload.state.reported.sw0,payload.state.reported.sw1];
+            result.pwa = [payload.state.reported.pw0,payload.state.reported.pw1];
+            result.ixa = [payload.state.reported.ix0,payload.state.reported.ix1];
+            result.cpa = [payload.state.reported.cp0,payload.state.reported.cp1];
+            result.cza = [payload.state.reported.cz0,payload.state.reported.cz1];
+            result.sta = [payload.state.reported.st0,payload.state.reported.st1];
+            result.pva = [payload.state.reported.pv0,payload.state.reported.pv1];
+            result.cpa[0] = (result.cpa[0]/10).toFixed(1);
+            result.cpa[1] = (result.cpa[1]/10).toFixed(1);
+            result.cza[0] = (result.cza[0]/10).toFixed(1);
+            result.cza[1] = (result.cza[1]/10).toFixed(1);
+            result.imax[0] = Number(result.imax[0]);
+            result.imax[1] = Number(result.imax[1]);
+            result.ixa[0] = (result.ixa[0]/1000).toFixed(1);
+            result.ixa[1] = (result.ixa[1]/1000).toFixed(1);
+            if ( result.pwa[0] < 10000 ) {
+                result.pwa[0] = (result.pwa[0]/1000).toFixed(3);
+            } else if ( result.pwa[0] < 100000 ) {
+                result.pwa[0] = (result.pwa[0]/1000).toFixed(2);
+            } else if ( result.pwa[0] < 1000000 ) {
+                result.pwa[0] = (result.pwa[0]/1000).toFixed(1);
             } else {
-              result.sta = payload.state.reported['st'+gunid];
-              result.swa = payload.state.reported['sw'+gunid];
-              result.ixa = payload.state.reported['ix'+gunid];
-              result.ixa = result.ixa>10000?(result.ixa/1000).toFixed(0):(result.ixa/1000).toFixed(1);
-              result.cpa = (payload.state.reported['cp'+gunid]/10).toFixed(1);
-              result.cza = (payload.state.reported['cz'+gunid]/10).toFixed(1);
-              result.pwa = payload.state.reported['pw'+gunid];
+                result.pwa[0] = (result.pwa[0]/1000).toFixed(0);
             }
-            if ( result.pwa < 10000 ) {
-              result.pwa = (result.pwa/1000).toFixed(3);
-            } else if ( result.pwa < 100000 ) {
-              result.pwa = (result.pwa/1000).toFixed(2);
-            } else if ( result.pwa < 1000000 ) {
-              result.pwa = (result.pwa/1000).toFixed(1);
+            if ( result.pwa[1] < 10000 ) {
+                result.pwa[1] = (result.pwa[1]/1000).toFixed(3);
+            } else if ( result.pwa[1] < 100000 ) {
+                result.pwa[1] = (result.pwa[1]/1000).toFixed(2);
+            } else if ( result.pwa[1] < 1000000 ) {
+                result.pwa[1] = (result.pwa[1]/1000).toFixed(1);
             } else {
-              result.pwa = (result.pwa/1000).toFixed(0);
+                result.pwa[1] = (result.pwa[1]/1000).toFixed(0);
             }
             if ( result.connected ) {
               if ( result.stp ) {
                 result.stateid = 5;
-              } else if ( result.sta == 0 ) {
+              } else if ( result.sta[gunid] == 0 ) {
                 if ( payload.state.reported['cp'+gunid] >50 && payload.state.reported['cp'+gunid] < 98 ) {
                   result.stateid = 1;  //readygunin
                 } else {  //没有插枪，空闲 readyfree
@@ -391,17 +393,15 @@ exports.mainHandler = async (event, context, callback) => {
                     result.stateid = 4;
                   }
                 }
-              } else if ( result.sta == 1 ) {
+              } else if ( result.sta[gunid] == 1 ) {
                 result.stateid = 2;
-              } else if ( result.sta == 6 ) {
+              } else if ( result.sta[gunid] == 6 ) {
                 result.stateid = 3;
+              } else {
+                result.stateid = 2;
               }
             } else {
               result.stateid = 6;
-            }
-            result.imax = iotdata.attributes.imax.split(',');
-            for (let i=0;i<result.imax.length;i++) {
-              result.imax[i] = Number(result.imax[i]);
             }
             if ( loads == 0 ) {
               let pubparam = {
@@ -438,11 +438,13 @@ exports.mainHandler = async (event, context, callback) => {
           }
           if ( iotdata ) {
             guestok = iotdata.attributes.guestok;
+            let chargerid = iotdata.attributes.chargerid;
             if ( guestok == '0' ) {
               if ( useritem ) {
-                if ( useritem.permedthing && useritem.permedthing.SS && !useritem.permedthing.SS.contains(mac) ) {
-                  //设备设置为授权启动，但用户账号不在授权列表中
-                  errcode = 3;
+                errcode = 3;
+                //设备设置为授权启动，但用户账号不在授权列表中
+                if ( useritem.permedcharger && useritem.permedcharger.SS && useritem.permedcharger.SS.contains(chargerid) ) {
+                    errcode = 0;
                 }
               } else {
                 //没有这个用户
@@ -513,38 +515,7 @@ exports.mainHandler = async (event, context, callback) => {
           }
           response.body = JSON.stringify(ret);
           callback(null, response);
-        } else if (apiname=='setchargertype') {  //0,1,2,3
-          let ret = {rc:0};
-          let uid = event.queryStringParameters.userid;
-          let getparam = { TableName: 'evuser', Key: {id:{S:uid}} };
-          let useritem = (await ddbclient.send(new GetItemCommand(getparam))).Item;
-          let usertype = 0;
-          if (useritem) usertype = useritem.utype.N;
-          if ( usertype == 9 ) {
-            let chargertype = event.queryStringParameters.chargertype;
-            let mac = event.queryStringParameters.mac;
-            let updatethingParams = {
-              thingName: mac,
-              attributePayload: {
-                attributes: {
-                  'chargertype': chargertype
-                },
-                merge: true
-              }
-            };
-            try {
-              await iotclient.send(new UpdateThingCommand(updatethingParams));
-              ret.rc = 1;
-            } catch (err) {
-              ret.rc = -2;
-              console.log(err);
-            }
-          } else {
-            ret.rc = -1;
-          }
-          response.body = JSON.stringify(ret);
-          callback(null, response);
-        } else if (apiname=='setguestok') {  //0,1,2,3
+        } else if (apiname=='setguestok') {  //0,1
           let ret = {rc:0};
           let uid = event.queryStringParameters.userid;
           let getparam = { TableName: 'evuser', Key: {id:{S:uid}} };
@@ -575,7 +546,7 @@ exports.mainHandler = async (event, context, callback) => {
           }
           response.body = JSON.stringify(ret);
           callback(null, response);
-        } else if (apiname=='setimax') {  //imax=32,16,16
+        } else if (apiname=='setimax') {  //imax=32,16
           let ret = {rc:0};
           let uid = event.queryStringParameters.userid;
           let getparam = { TableName: 'evuser', Key: {id:{S:uid}} };
@@ -711,6 +682,47 @@ exports.mainHandler = async (event, context, callback) => {
               ret.rc = -2;
               console.log(err);
             }
+          } else {
+            ret.rc = -1;
+          }
+          response.body = JSON.stringify(ret);
+          callback(null, response);
+        } else if (apiname=='savepermedcharger') {
+          let ret = {rc:0};
+          let uid = event.queryStringParameters.userid;
+          let getparam = { TableName: 'evuser', Key: {id:{S:uid}} };
+          let useritem = (await ddbclient.send(new GetItemCommand(getparam))).Item;
+          let usertype = 0;
+          if (useritem) usertype = useritem.utype.N;
+          if ( usertype == 9 ) {
+            let uid = event.queryStringParameters.uid;
+            let permed = event.queryStringParameters.permed;
+            if (permed && permed.length>5) {
+                permed = permed.split(',');
+                let updateparam = { TableName: 'evuser', Key: {id:{S:uid}},
+                    UpdateExpression: 'SET permedcharger=:permd',
+                    ExpressionAttributeValues:{':permd':{SS:permed}}
+                };
+                await ddbclient.send(new UpdateItemCommand(updateparam));
+            }
+            ret.rc = 1;
+          } else {
+            ret.rc = -1;
+          }
+          response.body = JSON.stringify(ret);
+          callback(null, response);
+        } else if (apiname=='removeone') {
+          let ret = {rc:0};
+          let uid = event.queryStringParameters.userid;
+          let getparam = { TableName: 'evuser', Key: {id:{S:uid}} };
+          let useritem = (await ddbclient.send(new GetItemCommand(getparam))).Item;
+          let usertype = 0;
+          if (useritem) usertype = useritem.utype.N;
+          if ( usertype == 9 ) {
+            let rid = event.queryStringParameters.id;
+            let removeparam = { TableName: 'evuser', Key: {id:{S:rid}} };
+            await ddbclient.send(new DeleteItemCommand(removeparam));
+            ret.rc = 1;
           } else {
             ret.rc = -1;
           }

@@ -22,15 +22,9 @@ Parameters:
   DefaultGuestok:
     Type: String
     Default: 1
-  DefaultChargertype:
-    Type: String
-    Default: 1
   DefaultGunstandard:
     Type: String
     Default: 0
-  SimpleGunCPid:
-    Type: String
-    Default: 2
   AWSRegion:
     Type: String
     Default: cn-northwest-1
@@ -100,13 +94,11 @@ Resources:
           Time_Zone: !Ref TimeZone
           Default_ThingType: !Ref DefaultThingType
           Default_Guestok: !Ref DefaultGuestok
-          Default_Chargertype: !Ref DefaultChargertype
           Default_Gunstandard: !Ref DefaultGunstandard
           AWS_Region: !Ref AWSRegion
           DDB_Server_URL: !Ref DDBServerURL
           IOT_Server_URL: !Ref IOTServerURL
           IOT_Data_ENDPOINT: !Ref IotDataEndpoint
-          Simple_Gun_CPid: !Ref SimpleGunCPid
 
   iotappFunction:
     Type: AWS::Serverless::Function
@@ -136,6 +128,7 @@ Resources:
     Properties:
       CorsConfiguration:
         AllowOrigins:
+          - "http://localhost:8080"
           - "http://iot.mosf.cn"
           - "http://iot.xnexcharger.com"
       StageName:
