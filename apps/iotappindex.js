@@ -15,7 +15,7 @@ const iotclient = new IoTClient(iotCONFIG);
 const iotdataclient = new IoTDataPlaneClient(iotCONFIG);
 const ddbclient = new DynamoDBClient(iotCONFIG);
 
-let response = { statusCode: 200, body: 'OK' };
+let response = { statusCode: 200, body: 'OK' , headers: {'Access-Control-Allow-Origin':'*','Access-Control-Allow-Credentials':true}};
 
 exports.mainHandler = async (event, context, callback) => {
     let apiname = event.pathParameters.proxy || '';
@@ -148,6 +148,7 @@ exports.mainHandler = async (event, context, callback) => {
                     item.gunstandard = Number(iotdata.things[i].attributes.gunstandard);
                     item.ipaddress = iotdata.things[i].attributes.ipaddress;
                     item.imax = iotdata.things[i].attributes.imax.split(',');
+                    item.hfconst = iotdata.things[i].attributes.hfconst.split(',');
                     item.guestok = Number(iotdata.things[i].attributes.guestok);
                     item.gunstyle = Number(iotdata.things[i].attributes.gunstyle);
                     if (isNaN(item.connected)) item.connected = 0;
@@ -204,6 +205,15 @@ exports.mainHandler = async (event, context, callback) => {
                           item.pwa[1] = (item.pwa[1]/1000).toFixed(1);
                       } else {
                           item.pwa[1] = (item.pwa[1]/1000).toFixed(0);
+                      }
+                      for (let i=0;i<2;i++) {
+                        if (item.sta[i]==null || item.sta[i]=='null' || item.sta[i]=='NaN') item.sta[i] = 0;
+                        if (item.swa[i]==null || item.swa[i]=='null' || item.swa[i]=='NaN') item.swa[i] = '-';
+                        if (item.pwa[i]==null || item.pwa[i]=='null' || item.pwa[i]=='NaN') item.pwa[i] = '-';
+                        if (item.ixa[i]==null || item.ixa[i]=='null' || item.ixa[i]=='NaN') item.ixa[i] = '-';
+                        if (item.cpa[i]==null || item.cpa[i]=='null' || item.cpa[i]=='NaN') item.cpa[i] = '-';
+                        if (item.cza[i]==null || item.cza[i]=='null' || item.cza[i]=='NaN') item.cza[i] = '-';
+                        if (item.pva[i]==null || item.pva[i]=='null' || item.pva[i]=='NaN') item.pva[i] = '-';
                       }
                       result.items.push(item);
                     } catch (err) {
@@ -280,6 +290,10 @@ exports.mainHandler = async (event, context, callback) => {
                   } else {
                     _uflag = '-';
                   }
+                  _permedchargers = [];
+                  if (useritem.permedcharger && useritem.permedcharger.SS) {
+                      _permedchargers = useritem.permedcharger.SS;
+                  }
                   _id = useritem.id.S;
                   _regtime = useritem.regtime.S;
                   _uadevice = useritem.uadevice.S;
@@ -292,7 +306,8 @@ exports.mainHandler = async (event, context, callback) => {
                   _regtime = _regtime.substr(0,4)+'-'+_regtime.substr(4,2)+'-'+_regtime.substr(6,2);
                   _lastvisit = _lastvisit.substr(4,2)+'-'+_lastvisit.substr(6,2)+' '+_lastvisit.substr(8,2)+':'+_lastvisit.substr(10,2);
                   result.items.push({id:_id,regtime:_regtime,lastvisit:_lastvisit,utype:_utype,powall:_powall,
-                    uadevice:_uadevice,uabrowser:_uabrowser,ipaddress:_ipaddress,chgtimes:_chgtimes,uflag:_uflag});
+                    uadevice:_uadevice,uabrowser:_uabrowser,ipaddress:_ipaddress,chgtimes:_chgtimes,uflag:_uflag,
+                      permedcharger:_permedchargers});
               }
                 if (searchdata.LastEvaluatedKey) result.nextToken = searchdata.LastEvaluatedKey;
               }
@@ -379,6 +394,15 @@ exports.mainHandler = async (event, context, callback) => {
                 result.pwa[1] = (result.pwa[1]/1000).toFixed(1);
             } else {
                 result.pwa[1] = (result.pwa[1]/1000).toFixed(0);
+            }
+            for (let i=0;i<2;i++) {
+              if (result.sta[i]==null || result.sta[i]=='null' || result.sta[i]=='NaN') result.sta[i] = 0;
+              if (result.swa[i]==null || result.swa[i]=='null' || result.swa[i]=='NaN') result.swa[i] = '-';
+              if (result.pwa[i]==null || result.pwa[i]=='null' || result.pwa[i]=='NaN') result.pwa[i] = '-';
+              if (result.ixa[i]==null || result.ixa[i]=='null' || result.ixa[i]=='NaN') result.ixa[i] = '-';
+              if (result.cpa[i]==null || result.cpa[i]=='null' || result.cpa[i]=='NaN') result.cpa[i] = '-';
+              if (result.cza[i]==null || result.cza[i]=='null' || result.cza[i]=='NaN') result.cza[i] = '-';
+              if (result.pva[i]==null || result.pva[i]=='null' || result.pva[i]=='NaN') result.pva[i] = '-';
             }
             if ( result.connected ) {
               if ( result.stp ) {
@@ -704,6 +728,11 @@ exports.mainHandler = async (event, context, callback) => {
                     ExpressionAttributeValues:{':permd':{SS:permed}}
                 };
                 await ddbclient.send(new UpdateItemCommand(updateparam));
+            } else {
+                let updateparam = { TableName: 'evuser', Key: {id:{S:uid}},
+                    UpdateExpression: 'REMOVE permedcharger'
+                };
+                await ddbclient.send(new UpdateItemCommand(updateparam));
             }
             ret.rc = 1;
           } else {
@@ -744,7 +773,7 @@ exports.mainHandler = async (event, context, callback) => {
             uabrowser = '(unknown)';
           }
           let nowtmstr = moment(new Date().getTime()).tz(config.TZ).format(config.TF);
-          response.headers = {'content-type':'text/html'};
+          response.headers['content-type'] = 'text/html';
           response.body = '<b>xiaoniu EvCharger AppServer.</b><br/>Author: Shenzhen Xiaoniu New Energy Company.<br/>TimeNow: ' + nowtmstr + '<br/>AppVer: ' + config.APIVERSION + '<br/>YourIP: ' + ipaddress + '<br/>Browser: ' + uadevice + '/' + uabrowser;
           return response;
         } else {

@@ -83,6 +83,7 @@ let issueCert = async ( mac ) => {
           'gunstandard':config.DEFAULT_GUNSTANDARD,
           'guestok':config.DEFAULT_GUESTOK,
           'imax':'0,0',
+          'hfconst':'64,64',
           'fmver':'1.0.0',
           'debug':'1',
           'pon':'1',
@@ -229,18 +230,21 @@ exports.mainHandler = async (payload) => {
             console.log(err);
           }
           let imax = [32,32];
+          let hfconst = [64,64];
           let chargerid = '000000';
-          let chargertype = 0; //美标
           try {
             let iotdata = await iotclient.send(new DescribeThingCommand({thingName:mac}));
             imax = iotdata.attributes.imax.split(',');
-            for (let i=0;i<imax.length;i++) imax[i] = Number(imax[i]);
+            hfconst = iotdata.attributes.hfconst.split(',');
+            for (let i=0;i<imax.length;i++) {
+              imax[i] = Number(imax[i]);
+              hfconst[i] = Number(hfconst[i]);
+            }
             chargerid = iotdata.attributes.chargerid;
-            gunstandard = Number(iotdata.attributes.gunstandard);
           } catch (err) {
             console.error(err);
           }
-          let outjson = {'firstboot':{'limit':imax,'chargerid':chargerid}};
+          let outjson = {'firstboot':{'limit':imax,'chargerid':chargerid,'hfconst':hfconst/*,'pwmstyle':1*/}};
           let pubparam = {
             topic: 'xniot/work/'+mac,
             payload: Buffer.from(JSON.stringify(outjson)),
@@ -257,10 +261,13 @@ exports.mainHandler = async (payload) => {
                 let wifimac = payload.wifimac;
                 let gunstyle = payload.gun;
                 let imax = '32,32';
+                let hfconst = '64,64';
                 if ( gunstyle == 1 ) {
                     imax = '0,32';
+                    hfconst = '0,64';
                 } else if ( gunstyle == 2 ) {
                     imax = '32,0';
+                    hfconst = '64,0';
                 }
                 gunstyle = ''+gunstyle;
                 let data = await listPolicyPrincipals( wifimac );
@@ -328,6 +335,7 @@ exports.mainHandler = async (payload) => {
                   attributePayload: {
                     attributes: {
                       'imax': imax,
+                      'hfconst': hfconst,
                       'gunstyle': gunstyle
                     },
                     merge: true
