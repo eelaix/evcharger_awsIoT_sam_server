@@ -225,6 +225,67 @@ exports.mainHandler = async (event, context, callback) => {
             }
             response.body = JSON.stringify(result);
             callback(null, response);
+          } else if (apiname=='listchargerids') {
+            let result = {nextToken:undefined,items:[]};
+            let uid = event.queryStringParameters.userid;
+            let getparam = { TableName: 'evuser', Key: {id:{S:uid}} };
+            let useritem = (await ddbclient.send(new GetItemCommand(getparam))).Item;
+            let usertype = 0;
+            if (useritem && useritem.utype) usertype = useritem.utype.N;
+            if ( usertype == 9 ) {
+              let iotdata = undefined;
+              let search = event.queryStringParameters.search;
+              if ( search && search.length == 12 ) {
+                try {
+                  let descdata = await iotclient.send(new DescribeThingCommand({thingName:search}));
+                  iotdata = {things:[]};
+                  iotdata.things.push(descdata);
+                } catch (err) {
+                  console.error(err);
+                }
+              } else {
+                let nextToken = event.queryStringParameters.nextToken;
+                let listParam = {maxResults:config.MAX_RESULTS};
+                if (nextToken) {
+                    listParam.nextToken = nextToken;
+                }
+                if (search && search.length > 3 && search.length < 11) {
+                    if ( search.length < 6 ) {
+                      listParam.attributeName = 'chargerid';
+                      listParam.attributeValue = search;
+                      listParam.usePrefixAttributeValue = true;
+                    } else if ( search.length == 6 ) {
+                      listParam.attributeName = 'chargerid';
+                      listParam.attributeValue = search;
+                    } else if ( search.length < 11 ) {
+                      listParam.attributeName = 'onltime';
+                      listParam.attributeValue = search.replace(/-/g,'');
+                      listParam.usePrefixAttributeValue = true;
+                    }
+                }
+                if ( !listParam.attributeName ) {
+                  listParam.thingTypeName = config.DEFAULT_THINGTYPE;
+                }
+                try {
+                    console.log(JSON.stringify(listParam));
+                    iotdata = await iotclient.send(new ListThingsCommand(listParam));
+                } catch (err) {
+                    console.error(err);
+                    iotdata = undefined;
+                }
+              }
+              if (iotdata) {
+                  if ( iotdata.nextToken ) {
+                    result.nextToken = iotdata.nextToken;
+                  }
+                  for (let i=0;i<iotdata.things.length;i++) {
+                    if ( iotdata.things[i].thingTypeName != config.DEFAULT_THINGTYPE ) continue;
+                    result.items.push(iotdata.things[i].attributes.chargerid);
+                  }
+              }
+            }
+            response.body = JSON.stringify(result);
+            callback(null, response);
         } else if (apiname=='listusers') {
             let result = {nextToken:undefined,items:[]};
             let uid = event.queryStringParameters.userid;
