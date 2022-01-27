@@ -3,7 +3,7 @@ Copyright 2020 ShenZhen Xiaoniu New Energy Inc. All Rights Reserved.
 Author: saico@mosf.cn
 **/
 
-const { IoTClient,ListThingsCommand,DescribeThingCommand,UpdateThingCommand } = require('@aws-sdk/client-iot');
+const { IoTClient,ListThingsCommand,DescribeThingCommand,UpdateThingCommand,GetOTAUpdateCommand } = require('@aws-sdk/client-iot');
 const { IoTDataPlaneClient,GetThingShadowCommand,PublishCommand } = require('@aws-sdk/client-iot-data-plane');
 const { DynamoDBClient,GetItemCommand,PutItemCommand,UpdateItemCommand,QueryCommand,DeleteItemCommand } = require('@aws-sdk/client-dynamodb');
 const { nanoid } = require('nanoid');
@@ -742,33 +742,63 @@ exports.mainHandler = async (event, context, callback) => {
             let cmdid = Number(event.queryStringParameters.cmd)||1;
             let mac = event.queryStringParameters.mac;
             let pubparam;
+            let otaid;
             if (cmdid==1) {
-              pubparam = {
-                topic: 'xniot/work/'+mac,
-                payload: Buffer.from(JSON.stringify({'cmd':'update'})),
-                qos: 1
-              };
+              let ver = event.queryStringParameters.ver;
+              ver = ver.replace(/\./g,'');
+              ver = Number(ver);
+              let newver = ver+1;
+              ver = ver.toString().split('');
+              newver = newver.toString().split('');
+              otaid = 'evfw_ota_'+ver[0]+'_'+ver[1]+'_'+ver[2]+'_to_'+newver[0]+'_'+newver[1]+'_'+newver[2];
+              try {
+                await iotclient.send(new GetOTAUpdateCommand({otaUpdateId:otaid}));
+                pubparam = {
+                    topic: 'xniot/work/'+mac,
+                    payload: Buffer.from(JSON.stringify({'cmd':'update'})),
+                    qos: 1
+                };
+              } catch (err) {
+                  pubparam  = undefined;
+              }
             } else if (cmdid==2) {
               pubparam = {
                 topic: 'xniot/work/'+mac,
                 payload: Buffer.from(JSON.stringify({'cmd':'reboot'})),
                 qos: 1
               };
-            } else {
+            } else if (cmdid==3) {
               pubparam = {
                 topic: 'xniot/work/'+mac,
                 payload: Buffer.from(JSON.stringify({'beep':3})),
                 qos: 1
               };
+            } else if (cmdid==4) {
+              pubparam = {
+                topic: 'xniot/work/'+mac,
+                payload: Buffer.from(JSON.stringify({'clnpon':0})),
+                qos: 1
+              };
             }
             try {
+              if (cmdid==1 && pubparam==undefined) {
+                pubparam = {
+                    topic: 'xniot/work/'+mac,
+                    payload: Buffer.from(JSON.stringify({'beep':9})),
+                    qos: 1
+                };
+                ret.rc = -3;
+                ret.rm = 'OTA ['+otaid+'] not found, create first!';
+              }
               await iotdataclient.send(new PublishCommand(pubparam));
             } catch (err) {
               ret.rc = -2;
+              ret.rm = 'Message send failed!';
               console.log(err);
             }
           } else {
             ret.rc = -1;
+            ret.rm = 'NOT allowed!';
           }
           response.body = JSON.stringify(ret);
           callback(null, response);
