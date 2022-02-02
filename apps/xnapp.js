@@ -23,6 +23,9 @@ const iotclient = new IoTClient(iotCONFIG);
 const iotdataclient = new IoTDataPlaneClient(iotCONFIG);
 const moment = require('moment-timezone');
 
+const { SQSClient, SendMessageCommand } = require("@aws-sdk/client-sqs");
+const sqsclient = new SQSClient(iotCONFIG);
+
 let listPolicyPrincipals = async ( mac ) => {
     let params = {
       policyName: mac
@@ -145,14 +148,24 @@ exports.mainHandler = async (payload) => {
         let eventType = payload.eventType;
         if (eventType=='connected') {   //connect/disconnect基本上是同时调用，前后相差不超过100ms
             if (mac.length==12 && mac!='xniotevesps2') {
+              let precnts = 0;
+              try {
+                let iotdata = await iotclient.send(new DescribeThingCommand({thingName:mac}));
+                precnts = Number(iotdata.attributes.connected);
+                if ( isNaN(precnts) ) precnts = 0;
+              } catch (err) {
+                console.error(err);
+              }
+              precnts++;
               let nowtm = moment(new Date().getTime()).tz(config.TZ).format(config.SF);
               let updatethingParams = {
                 thingName: mac,
                 attributePayload: {
                   attributes: {
-                    'ipaddress': payload.ipAddress,
-                    'onltime': nowtm,
-                    'connected': '1'
+                    'ipaddress':payload.ipAddress,
+                    'onltime':nowtm,
+                    'offtime':'0',
+                    'connected':precnts.toString()
                   },
                   merge: true
                 }
@@ -165,33 +178,16 @@ exports.mainHandler = async (payload) => {
             }
         } else if (eventType=='disconnected') {
             if (mac.length==12 && mac!='xniotevesps2') {
-              let preonlinepasted = 1000;  //seconds
-              try {
-                let iotdata = await iotclient.send(new DescribeThingCommand({thingName:mac}));
-                let preonline = Number(iotdata.attributes.onltime);
-                let nowseconds = Number(moment(new Date().getTime()).tz(config.TZ).format(config.SF));
-                preonlinepasted = nowseconds - preonline;  //20221231235959 - 202112315959
-              } catch (err) {
-                console.error(err);
-              }
-              if ( preonlinepasted > 10 ) {
-                let nowtm = moment(new Date().getTime()).tz(config.TZ).format(config.SF);
-                let updatethingParams = {
-                  thingName: mac,
-                  attributePayload: {
-                    attributes: {
-                      'offtime': nowtm,
-                      'connected': '0'
-                    },
-                    merge: true
-                  }
-                };
-                try {
-                  await iotclient.send(new UpdateThingCommand(updatethingParams));
-                } catch (err) {
-                  console.log(err);
-                }
-              }
+              let msgbody = {
+                msgtype: 0,
+                mac:mac
+              };
+              let qeparams = {
+                DelaySeconds: 30,
+                MessageBody:JSON.stringify(msgbody),
+                QueueUrl: config.SQS_QUEUE_URL
+              };
+              await sqsclient.send(new SendMessageCommand(qeparams));
             }
         } else {
             console.error('connectevent', JSON.stringify(payload));
@@ -214,12 +210,14 @@ exports.mainHandler = async (payload) => {
             thingName: mac,
             attributePayload: {
               attributes: {
-                'pot': nowtm,
-                'pon': pon.toString(),
-                'fmver': fmver,
-                'swk': swk.toString(),
-                'debug': debug.toString(),
-                'connected': '1'
+                'pot':nowtm,
+                'pon':pon.toString(),
+                'fmver':fmver,
+                'swk':swk.toString(),
+                'debug':debug.toString(),
+                'onltime':nowtm,
+                'offtime':'0',
+                'connected':'1'
               },
               merge: true
             }

@@ -113,9 +113,15 @@ exports.mainHandler = async (event, context, callback) => {
                       listParam.usePrefixAttributeValue = true;
                     }
                 }
-                if (connected) {
-                  listParam.attributeName = 'connected';
-                  listParam.attributeValue = connected==1?'1':'0';
+                if (connected) {  //0=全部，不会提交这个参数，1在线，2离线
+                  if (connected==2) {
+                    listParam.attributeName = 'onltime';
+                    listParam.attributeValue = '0';
+                  } else {
+                    listParam.attributeName = 'onltime';
+                    listParam.attributeValue = '202'
+                    listParam.usePrefixAttributeValue = true;
+                  }
                 }
                 if ( !listParam.attributeName ) {
                   listParam.thingTypeName = config.DEFAULT_THINGTYPE;
@@ -169,8 +175,18 @@ exports.mainHandler = async (event, context, callback) => {
                       item.beeptime = moment(beep*1000).tz(config.TZ).format(config.ST);
                       item.keyid = beepkeyid;
                       item.rebootdate = item.pot.substr(0,4)+'-'+item.pot.substr(4,2)+'-'+item.pot.substr(6,2);
-                      item.onlinedate = item.onltime.substr(0,4)+'-'+item.onltime.substr(4,2)+'-'+item.onltime.substr(6,2);
-                      item.offdate = item.offtime.substr(0,4)+'-'+item.offtime.substr(4,2)+'-'+item.offtime.substr(6,2);
+                      if (item.onltime=='0') {
+                        item.onlinedate = '-';
+                      } else {
+                        item.onlinedate = item.onltime.substr(0,4)+'-'+item.onltime.substr(4,2)+'-'+item.onltime.substr(6,2);
+                      }
+                      if (item.offtime=='0') {
+                        item.offdate = '-';
+                      } else {
+                        item.offdate = item.offtime.substr(0,4)+'-'+item.offtime.substr(4,2)+'-'+item.offtime.substr(6,2);
+                      }
+                      item.onltime = Number(item.onltime);
+                      item.offtime = Number(item.offtime);
                       item.dor = payload.state.reported.dor;
                       item.stp = payload.state.reported.stp;
                       item.lgd = payload.state.reported.lgd;
@@ -376,7 +392,7 @@ exports.mainHandler = async (event, context, callback) => {
             response.body = JSON.stringify(result);
             callback(null, response);
         } else if (apiname=='getcharger') {
-          let result = {mac:'',guestok:1,gunstyle:1,gunstandard:0,connected:0,ver:'0.0.0',swk:0,stp:0,dor:0,lgd:0,sta:[0,0],pwa:[0,0],ixa:[0,0],tpa:[0,0],cpa:[0,0],cza:[0,0],pva:[0,0]};
+          let result = {mac:'',guestok:1,gunstyle:1,gunstandard:0,onltime:0,ver:'0.0.0',swk:0,stp:0,dor:0,lgd:0,sta:[0,0],pwa:[0,0],ixa:[0,0],tpa:[0,0],cpa:[0,0],cza:[0,0],pva:[0,0]};
           let chargerid = event.queryStringParameters.chargerid;
           let gunid = Number(event.queryStringParameters.gunid)||0;
           let loads = event.queryStringParameters.loads;
@@ -406,7 +422,7 @@ exports.mainHandler = async (event, context, callback) => {
             result.guestok = Number(iotdata.attributes.guestok);
             result.gunstyle = Number(iotdata.attributes.gunstyle);
             result.gunstandard = Number(iotdata.attributes.gunstandard);
-            result.connected = Number(iotdata.attributes.connected);
+            result.onltime = Number(iotdata.attributes.onltime);
             result.swk = Number(iotdata.attributes.swk);
             result.imax = iotdata.attributes.imax.split(',');
             result.ver = iotdata.attributes.fmver;
@@ -465,7 +481,7 @@ exports.mainHandler = async (event, context, callback) => {
               if (result.cza[i]==null || result.cza[i]=='null' || result.cza[i]=='NaN') result.cza[i] = '-';
               if (result.pva[i]==null || result.pva[i]=='null' || result.pva[i]=='NaN') result.pva[i] = '-';
             }
-            if ( result.connected ) {
+            if ( result.onltime ) {
               if ( result.stp ) {
                 result.stateid = 5;
               } else if ( result.sta[gunid] == 0 ) {
@@ -790,12 +806,32 @@ exports.mainHandler = async (event, context, callback) => {
                 ret.rc = -3;
                 ret.rm = 'OTA ['+otaid+'] not found, create first!';
               }
-              await iotdataclient.send(new PublishCommand(pubparam));
+              let pubresult = await iotdataclient.send(new PublishCommand(pubparam));
+              console.log(pubresult);
             } catch (err) {
               ret.rc = -2;
               ret.rm = 'Message send failed!';
               console.log(err);
             }
+            if (cmdid==1 || cmdid==2) {
+              let nowtm = moment(new Date().getTime()).tz(config.TZ).format(config.SF);
+              let updatethingParams = {
+                thingName: mac,
+                attributePayload: {
+                  attributes: {
+                    'offtime':nowtm,
+                    'onltime':'0',
+                    'connected':'0'
+                  },
+                  merge: true
+                }
+              };
+              try {
+                await iotclient.send(new UpdateThingCommand(updatethingParams));
+              } catch (err) {
+                console.log(err);
+              }
+            }  
           } else {
             ret.rc = -1;
             ret.rm = 'NOT allowed!';
