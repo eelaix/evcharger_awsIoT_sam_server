@@ -199,6 +199,33 @@ exports.mainHandler = async (payload) => {
         }
         if (payload.guc) {
         }
+        if (payload.olresp) { //服务器收到disconnect时，会延时30s向设备发送olreq，设备收到olreq立即回复olresp, 服务器在这里收到olresp立即修正在线状态
+          let online = 0;
+          try {
+            let iotdata = await iotclient.send(new DescribeThingCommand({thingName:mac}));
+            online = Number(iotdata.attributes.onltime);
+          } catch (err) {
+            console.error(err);
+          }
+          if (online==0) {
+            let nowtm = moment(new Date().getTime()).tz(config.TZ).format(config.SF);
+            let updatethingParams = {
+              thingName: mac,
+              attributePayload: {
+                attributes: {
+                  'onltime':nowtm,
+                  'offtime':'0'
+                },
+                merge: true
+              }
+            }
+            try {
+              await iotclient.send(new UpdateThingCommand(updatethingParams));
+            } catch (err) {
+              console.log(err);
+            } 
+          }
+        }
         if (payload.firstboot) {
           //{\"firstboot\":1,\"wifimac\":\"%.*s\",\"ver\":\"%1d.%1d.%1d\",\"dbg\":%1d,\"pon\":%10ld,swk:111,gun:1}
           let nowtm = moment(new Date().getTime()).tz(config.TZ).format(config.SF);

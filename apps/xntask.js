@@ -10,6 +10,13 @@ const moment = require('moment-timezone');
 const iotCONFIG = {region:config.AWS_REGION};
 const iotclient = new IoTClient(iotCONFIG);
 
+const { IoTDataPlaneClient,PublishCommand } = require('@aws-sdk/client-iot-data-plane');
+const iotclient = new IoTClient(iotCONFIG);
+const iotdataclient = new IoTDataPlaneClient(iotCONFIG);
+
+const { SQSClient, SendMessageCommand } = require("@aws-sdk/client-sqs");
+const sqsclient = new SQSClient(iotCONFIG);
+
 /***********************************************************************************************/
 
 exports.mainHandler = async (event) => {
@@ -50,7 +57,29 @@ exports.mainHandler = async (event) => {
             console.log(err);
           }
         }
+        let msgbody = {
+          msgtype: 1,
+          mac:mac
+        };
+        let qeparams = {
+          DelaySeconds: 60,
+          MessageBody:JSON.stringify(msgbody),
+          QueueUrl: config.SQS_QUEUE_URL
+        };
+        await sqsclient.send(new SendMessageCommand(qeparams));
     } else if (msgtype==1) {
+      let mac = bodyjson.mac;
+      let outjson = {'olreq':1};
+      let pubparam = {
+        topic: 'xniot/work/'+mac,
+        payload: Buffer.from(JSON.stringify(outjson)),
+        qos: 1
+      };
+      try {
+        await iotdataclient.send(new PublishCommand(pubparam));
+      } catch (err) {
+        console.log(err);
+      }
     } else if (msgtype==2) {
     }
     console.timeEnd('xntask');
