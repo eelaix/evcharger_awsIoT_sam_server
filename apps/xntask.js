@@ -27,7 +27,7 @@ exports.mainHandler = async (event) => {
           let iotdata = await iotclient.send(new DescribeThingCommand({thingName:mac}));
           let prepot = moment(iotdata.attributes.pot, config.SF).toDate().getTime();
           connected = Number(iotdata.attributes.connected);
-          let nowseconds = new Date().getTime();
+          let nowseconds = moment(moment().tz(config.TZ).format(config.SF),config.SF).toDate().getTime();
           prepotpassed = nowseconds - prepot;
           console.log('nowTM(tz):'+nowtm+',pot:'+iotdata.attributes.pot+',passed:'+prepotpassed);
         } catch (err) {
