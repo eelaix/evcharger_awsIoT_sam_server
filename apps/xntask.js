@@ -11,7 +11,6 @@ const iotCONFIG = {region:config.AWS_REGION};
 const iotclient = new IoTClient(iotCONFIG);
 
 const { IoTDataPlaneClient,PublishCommand } = require('@aws-sdk/client-iot-data-plane');
-const iotclient = new IoTClient(iotCONFIG);
 const iotdataclient = new IoTDataPlaneClient(iotCONFIG);
 
 const { SQSClient, SendMessageCommand } = require("@aws-sdk/client-sqs");

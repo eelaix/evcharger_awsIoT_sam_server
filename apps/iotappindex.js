@@ -507,7 +507,7 @@ exports.mainHandler = async (event, context, callback) => {
             if ( loads == 0 ) {
               let pubparam = {
                 topic: 'xniot/work/'+mac,
-                payload: Buffer.from(JSON.stringify({'beep':2})),
+                payload: Buffer.from(JSON.stringify({'beep':[2,2]})),
                 qos: 1
               };
               await iotdataclient.send(new PublishCommand(pubparam));
@@ -786,7 +786,7 @@ exports.mainHandler = async (event, context, callback) => {
             } else if (cmdid==3) {
               pubparam = {
                 topic: 'xniot/work/'+mac,
-                payload: Buffer.from(JSON.stringify({'beep':3})),
+                payload: Buffer.from(JSON.stringify({'beep':[3,2]})),
                 qos: 1
               };
             } else if (cmdid==4) {
@@ -800,7 +800,7 @@ exports.mainHandler = async (event, context, callback) => {
               if (cmdid==1 && pubparam==undefined) {
                 pubparam = {
                     topic: 'xniot/work/'+mac,
-                    payload: Buffer.from(JSON.stringify({'beep':9})),
+                    payload: Buffer.from(JSON.stringify({'beep':[9,2]})),
                     qos: 1
                 };
                 ret.rc = -3;
