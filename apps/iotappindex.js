@@ -26,12 +26,22 @@ exports.mainHandler = async (event, context, callback) => {
             let usertype = 0;
             let userflag = '';
             let useritem = undefined;
+            let ipaddress = event.requestContext.http.sourceIp;
             if (uid && uid.length==21) {
                 let getparam = { TableName: 'evuser', Key: {id:{S:uid}} };
                 let theuser = await ddbclient.send(new GetItemCommand(getparam));
                 useritem = theuser.Item;
+                if (!useritem) {
+                  let lastx = moment(new Date().getTime()).tz(config.TZ).format(config.SF);
+                  let putparamx = { TableName: 'evuser', Item: {
+                    id:{S:uid},utype:{N:'0'},lastvisit:{S:lastx},regtime:{S:lastx},
+                    uadevice:{S:'-'},uabrowser:{S:'-'},ipaddress:{S:ipaddress},chgtimes:{N:'0'},powall:{N:'0'}
+                  }
+                  };
+                  await ddbclient.send(new PutItemCommand(putparamx));
+                  useritem = {id:{S:uid},utype:{N:'0'}};
+                }
             }
-            let ipaddress = event.requestContext.http.sourceIp;
             let useragent = event.requestContext.http.userAgent;
             let ua = uaparser(useragent);
             let uadevice = ua.device.model;
@@ -119,7 +129,7 @@ exports.mainHandler = async (event, context, callback) => {
                     listParam.attributeValue = '0';
                   } else {
                     listParam.attributeName = 'onltime';
-                    listParam.attributeValue = '202'
+                    listParam.attributeValue = '202';
                     listParam.usePrefixAttributeValue = true;
                   }
                 }
@@ -503,6 +513,23 @@ exports.mainHandler = async (event, context, callback) => {
               }
             } else {
               result.stateid = 6;
+              if ( loads == 5 ) {
+                let shadowtsmeta = payload.metadata.reported;
+                let beep = 0; //单位是秒
+                Object.keys(shadowtsmeta).forEach((key) => {
+                  if (key.length==3 && shadowtsmeta[key].timestamp>beep) {
+                    beep = shadowtsmeta[key].timestamp;
+                  }
+                });
+                if ( new Date().getTime()/1000 - beep < 1300 ) {
+                  let pubparamx = {
+                    topic: 'xniot/work/'+mac,
+                    payload: Buffer.from(JSON.stringify({'olreq':1})),
+                    qos: 1
+                  };
+                  await iotdataclient.send(new PublishCommand(pubparamx));    
+                }
+              }
             }
             if ( loads == 0 ) {
               let pubparam = {
