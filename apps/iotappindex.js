@@ -100,7 +100,7 @@ exports.mainHandler = async (event, context, callback) => {
                   iotdata = {things:[]};
                   iotdata.things.push(descdata);
                 } catch (err) {
-                  console.error(err);
+                  console.log(err);
                 }
               } else {
                 let nextToken = event.queryStringParameters.nextToken;
@@ -140,7 +140,7 @@ exports.mainHandler = async (event, context, callback) => {
                     console.log(JSON.stringify(listParam));
                     iotdata = await iotclient.send(new ListThingsCommand(listParam));
                 } catch (err) {
-                    console.error(err);
+                    console.log(err);
                     iotdata = undefined;
                 }
               }
@@ -243,7 +243,7 @@ exports.mainHandler = async (event, context, callback) => {
                       }
                       result.items.push(item);
                     } catch (err) {
-                      console.error(err);
+                      console.log(err);
                       console.log('no shadow for thing ['+item.mac+'] exists!');
                     }
                   }
@@ -267,7 +267,7 @@ exports.mainHandler = async (event, context, callback) => {
                   iotdata = {things:[]};
                   iotdata.things.push(descdata);
                 } catch (err) {
-                  console.error(err);
+                  console.log(err);
                 }
               } else {
                 let nextToken = event.queryStringParameters.nextToken;
@@ -296,7 +296,7 @@ exports.mainHandler = async (event, context, callback) => {
                     console.log(JSON.stringify(listParam));
                     iotdata = await iotclient.send(new ListThingsCommand(listParam));
                 } catch (err) {
-                    console.error(err);
+                    console.log(err);
                     iotdata = undefined;
                 }
               }
@@ -937,8 +937,8 @@ exports.mainHandler = async (event, context, callback) => {
           callback(null, response);
         }
     } catch (err) {
-        console.error(err);
-        console.error(event);
+        console.log(err);
+        console.log(event);
         response.body = 'FATAL ERROR';
         response.statusCode = 500;
         callback(null, response);

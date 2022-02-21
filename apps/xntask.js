@@ -37,7 +37,7 @@ exports.mainHandler = async (event) => {
           prepotpassed = nowseconds - prepot;
           console.log('nowTM(tz):'+nowtm+',pot:'+iotdata.attributes.pot+',passed:'+prepotpassed);
         } catch (err) {
-          console.error(err);
+          console.log(err);
         }
         if ( prepotpassed > 60000 && connected > 0 ) {
           let updatethingParams = {

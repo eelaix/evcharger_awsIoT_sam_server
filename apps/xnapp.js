@@ -147,33 +147,38 @@ exports.mainHandler = async (payload) => {
         let mac = payload.connevent;
         let eventType = payload.eventType;
         if (eventType=='connected') {   //connect/disconnect基本上是同时调用，前后相差不超过100ms
-            if (mac.length==12 && mac!='xniotevesps2') {
+            if (mac.length==12) {
               let precnts = 0;
+              let thingtypename = '';
               try {
                 let iotdata = await iotclient.send(new DescribeThingCommand({thingName:mac}));
                 precnts = Number(iotdata.attributes.connected);
+                thingtypename = iotdata.thingTypeName;
                 if ( isNaN(precnts) ) precnts = 0;
               } catch (err) {
-                console.error(err);
-              }
-              precnts++;
-              let nowtm = moment(new Date().getTime()).tz(config.TZ).format(config.SF);
-              let updatethingParams = {
-                thingName: mac,
-                attributePayload: {
-                  attributes: {
-                    'ipaddress':payload.ipAddress,
-                    'onltime':nowtm,
-                    'offtime':'0',
-                    'connected':precnts.toString()
-                  },
-                  merge: true
-                }
-              };
-              try {
-                await iotclient.send(new UpdateThingCommand(updatethingParams));
-              } catch (err) {
                 console.log(err);
+              }
+              if ( config.DEFAULT_THINGTYPE == thingtypename )
+              {
+                precnts++;
+                let nowtm = moment(new Date().getTime()).tz(config.TZ).format(config.SF);
+                let updatethingParams = {
+                  thingName: mac,
+                  attributePayload: {
+                    attributes: {
+                      'ipaddress':payload.ipAddress,
+                      'onltime':nowtm,
+                      'offtime':'0',
+                      'connected':precnts.toString()
+                    },
+                    merge: true
+                  }
+                };
+                try {
+                  await iotclient.send(new UpdateThingCommand(updatethingParams));
+                } catch (err) {
+                  console.log(err);
+                }
               }
             }
         } else if (eventType=='disconnected') {
