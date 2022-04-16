@@ -85,3 +85,7 @@ aws iot create-thing-type \
 5. 方法一，二适合知道WIFI密码的情况，方法三适合不知道WIFI密码，需要路由器上的WPS按钮配合
 6. https://xs.woniuev.cn/wifisetup.html 这是WIFI配网的具体步骤和工具
 7. 如需要测试设备请联系我公司采购
+
+https://hkweb.mosf.cn/devices.html 
+https://hkweb.mosf.cn/charger.html?id=100111 
+
