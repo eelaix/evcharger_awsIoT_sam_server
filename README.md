@@ -86,6 +86,7 @@ aws iot create-thing-type \
 6. https://xs.woniuev.cn/wifisetup.html 这是WIFI配网的具体步骤和工具
 7. 如需要测试设备请联系我公司采购
 
-https://hkweb.mosf.cn/devices.html 
-https://hkweb.mosf.cn/charger.html?id=100111 
+ https://hkweb.mosf.cn/devices.html 
+ 
+ https://hkweb.mosf.cn/charger.html?id=100111 
 
