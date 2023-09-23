@@ -2,7 +2,7 @@
 
 https://hkweb.mosf.cn/devices.html 这是一个已经部署好的真机环境 
 
-(This demo site offline from 2023.09)
+(Demo site offline from 2023.09)
 
 在你的电脑浏览器中第一次打开这个网页，你就已经自动登陆了，并且是超级管理员用户。
 
